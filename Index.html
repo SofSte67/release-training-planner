@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Product Tracker</title>
+  <!-- MSAL for Microsoft authentication -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/msal/1.4.18/msal.min.js"></script>
+  <!-- SheetJS for Excel handling -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+    h1 { color: #333; }
+    
+    .user-bar { background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .user-bar label { font-weight: bold; margin-right: 10px; }
+    .user-bar input { padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+    
+    .toolbar { margin-bottom: 15px; }
+    .btn { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; margin-right: 10px; }
+    .btn-primary { background: #0078d4; color: white; }
+    .btn-primary:hover { background: #005a9e; }
+    .btn-secondary { background: #6c757d; color: white; }
+    .btn-secondary:hover { background: #545b62; }
+    
+    table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee; }
+    th { background: #f8f9fa; font-weight: 600; color: #333; }
+    tr:hover { background: #f8f9fa; }
+    
+    .actions { display: flex; gap: 8px; }
+    .btn-edit { background: #28a745; color: white; padding: 6px 12px; font-size: 12px; }
+    .btn-delete { background: #dc3545; color: white; padding: 6px 12px; font-size: 12px; }
+    .btn-duplicate { background: #6c757d; color: white; padding: 6px 12px; font-size: 12px; }
+    .btn-edit:hover { background: #218838; }
+    .btn-delete:hover { background: #c82333; }
+    .btn-duplicate:hover { background: #545b62; }
+    
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
+    .modal.active { display: flex; align-items: center; justify-content: center; }
+    .modal-content { background: white; padding: 25px; border-radius: 8px; width: 500px; max-width: 90%; }
+    .modal h2 { margin-top: 0; }
+    .form-group { margin-bottom: 15px; }
+    .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
+    .form-group input, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+    .form-group textarea { height: 80px; resize: vertical; }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+    
+    .empty-state { text-align: center; padding: 40px; color: #666; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📋 Product Tracker</h1>
+  </header>
+
+  <main>
+    <div class="user-bar">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <label for="currentUser">👤 Your Name:</label>
+          <input type="text" id="currentUser" placeholder="Enter your name" value="User1">
+        </div>
+        <div id="loginStatus">
+          <button class="btn btn-primary" onclick="login()">🔐 Login with Microsoft</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <button class="btn btn-primary" onclick="openModal()">+ Add New Record</button>
+      <button class="btn btn-secondary" onclick="loadData()">🔄 Refresh</button>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Product Area</th>
+          <th>Session Title</th>
+          <th>Description</th>
+          <th>Owner</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody">
+      </tbody>
+    </table>
+    
+    <div id="emptyState" class="empty-state" style="display:none;">
+      No records yet. Click "Add New Record" to get started.
+    </div>
+  </main>
+
+  <!-- Modal for Add/Edit -->
+  <div id="recordModal" class="modal">
+    <div class="modal-content">
+      <h2 id="modalTitle">Add New Record</h2>
+      <form id="recordForm">
+        <input type="hidden" id="recordId">
+        <div class="form-group">
+          <label for="product">Product *</label>
+          <input type="text" id="product" required>
+        </div>
+        <div class="form-group">
+          <label for="productArea">Product Area *</label>
+          <input type="text" id="productArea" required>
+        </div>
+        <div class="form-group">
+          <label for="sessionTitle">Session Title *</label>
+          <input type="text" id="sessionTitle" required>
+        </div>
+        <div class="form-group">
+          <label for="description">Description</label>
+          <textarea id="description"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="owner">Owner *</label>
+          <input type="text" id="owner" required>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Initialize data (will be loaded from Excel when logged in)
+    let records = [];
+
+    // ============================================
+    // CONFIGURATION - Update these values
+    // ============================================
+    const CONFIG = {
+      clientId: 'aa12b8cf-940a-4415-badf-13e1fef050a9',
+      tenantId: '457d5685-0467-4d05-b23b-8f817adda47c',
+      // SharePoint site and Excel file path
+      sitePath: 'sites/ActiveLaunchPrograms',
+      excelFileName: '2026_Oct_RTP.xlsx'
+    };
+
+    // ============================================
+    // MSAL Authentication Setup
+    // ============================================
+    const msalConfig = {
+      auth: {
+        clientId: CONFIG.clientId,
+        authority: `https://login.microsoftonline.com/${CONFIG.tenantId}`,
+        redirectUri: window.location.href
+      },
+      cache: { cacheLocation: 'sessionStorage' }
+    };
+
+    const msalInstance = new msal.PublicClientApplication(msalConfig);
+    let accessToken = null;
+
+    // Login function
+    async function login() {
+      try {
+        const loginRequest = {
+          scopes: ['Files.ReadWrite', 'Sites.ReadWrite.All']
+        };
+        const response = await msalInstance.loginPopup(loginRequest);
+        accessToken = response.accessToken;
+        document.getElementById('loginStatus').innerHTML = 
+          `✅ Logged in as ${response.account.username} <button class="btn btn-secondary" onclick="logout()">Logout</button>`;
+        loadData();
+      } catch (error) {
+        console.error('Login failed:', error);
+        alert('Login failed. Please try again.');
+      }
+    }
+
+    // Logout function
+    function logout() {
+      msalInstance.logout();
+      accessToken = null;
+      document.getElementById('loginStatus').innerHTML = 
+        '<button class="btn btn-primary" onclick="login()">🔐 Login with Microsoft</button>';
+      records = [];
+      renderTable();
+    }
+
+    // Get Excel file from SharePoint
+    async function loadData() {
+      if (!accessToken) {
+        alert('Please login first!');
+        return;
+      }
+
+      try {
+        // Get file from SharePoint using Graph API
+        const response = await fetch(
+          `https://graph.microsoft.com/v1.0/sites/inforonline.sharepoint.com:/${CONFIG.sitePath}:/drive/root:/${CONFIG.excelFileName}:/content`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+
+        if (response.ok) {
+          const buffer = await response.arrayBuffer();
+          const data = new Uint8Array(buffer);
+          
+          // Parse Excel using SheetJS
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+          
+          // Convert array to records (skip header row)
+          if (jsonData.length > 1) {
+            records = jsonData.slice(1).map((row, index) => ({
+              id: index + 1,
+              product: row[0] || '',
+              productArea: row[1] || '',
+              sessionTitle: row[2] || '',
+              description: row[3] || '',
+              owner: row[4] || ''
+            }));
+          } else {
+            records = [];
+          }
+          console.log('Loaded', records.length, 'records from Excel');
+        } else if (response.status === 404) {
+          console.log('Excel file not found, starting fresh');
+          records = [];
+        }
+      } catch (error) {
+        console.error('Error loading data:', error);
+        // Fall back to local storage if Graph fails
+        records = JSON.parse(localStorage.getItem('productRecords')) || [];
+      }
+      
+      renderTable();
+    }
+
+    // Save data to Excel
+    async function saveData() {
+      // Always save to localStorage as backup
+      localStorage.setItem('productRecords', JSON.stringify(records));
+
+      if (!accessToken) {
+        console.log('Not logged in, saved to localStorage only');
+        return;
+      }
+
+      try {
+        // Convert records to Excel format
+        const headerRow = ['Product', 'Product Area', 'Session Title', 'Description', 'Owner'];
+        const dataRows = records.map(r => [r.product, r.productArea, r.sessionTitle, r.description, r.owner]);
+        const allData = [headerRow, ...dataRows];
+
+        // Create workbook
+        const worksheet = XLSX.utils.aoa_to_sheet(allData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Tracker');
+
+        // Convert to binary
+        const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+        // Upload to SharePoint
+        const uploadUrl = `https://graph.microsoft.com/v1.0/sites/inforonline.sharepoint.com:/${CONFIG.sitePath}:/drive/root:/${CONFIG.excelFileName}:/content`;
+        
+        const uploadResponse = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          },
+          body: blob
+        });
+
+        if (uploadResponse.ok) {
+          console.log('✅ Data saved to Excel!');
+        } else {
+          console.error('Failed to save to Excel:', uploadResponse.status);
+        }
+      } catch (error) {
+        console.error('Error saving to Excel:', error);
+      }
+    }
+
+    function getCurrentUser() {
+      return document.getElementById('currentUser').value.trim() || 'Anonymous';
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('tableBody');
+      const emptyState = document.getElementById('emptyState');
+      
+      if (!records || records.length === 0) {
+        tbody.innerHTML = '';
+        emptyState.style.display = 'block';
+        return;
+      }
+      
+      emptyState.style.display = 'none';
+      tbody.innerHTML = records.map(record => `
+        <tr>
+          <td>${escapeHtml(record.product)}</td>
+          <td>${escapeHtml(record.productArea)}</td>
+          <td>${escapeHtml(record.sessionTitle)}</td>
+          <td>${escapeHtml(record.description)}</td>
+          <td>${escapeHtml(record.owner)}</td>
+          <td class="actions">
+            <button class="btn btn-edit" onclick="editRecord(${record.id})">Edit</button>
+            <button class="btn btn-duplicate" onclick="duplicateRecord(${record.id})">Duplicate</button>
+            ${record.owner === getCurrentUser() 
+              ? `<button class="btn btn-delete" onclick="deleteRecord(${record.id})">Delete</button>` 
+              : `<button class="btn btn-delete" style="opacity:0.5;cursor:not-allowed;" disabled>Delete</button>`}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function openModal(record = null) {
+      const modal = document.getElementById('recordModal');
+      const form = document.getElementById('recordForm');
+      const title = document.getElementById('modalTitle');
+      
+      if (record) {
+        title.textContent = 'Edit Record';
+        document.getElementById('recordId').value = record.id;
+        document.getElementById('product').value = record.product;
+        document.getElementById('productArea').value = record.productArea;
+        document.getElementById('sessionTitle').value = record.sessionTitle;
+        document.getElementById('description').value = record.description;
+        document.getElementById('owner').value = record.owner;
+      } else {
+        title.textContent = 'Add New Record';
+        form.reset();
+        document.getElementById('recordId').value = '';
+        document.getElementById('owner').value = getCurrentUser();
+      }
+      
+      modal.classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('recordModal').classList.remove('active');
+    }
+
+    function editRecord(id) {
+      const record = records.find(r => r.id === id);
+      if (record) openModal(record);
+    }
+
+    function duplicateRecord(id) {
+      const record = records.find(r => r.id === id);
+      if (record) {
+        const newRecord = {
+          ...record,
+          id: Date.now(),
+          sessionTitle: record.sessionTitle + ' (Copy)',
+          owner: getCurrentUser()
+        };
+        records.push(newRecord);
+        saveData();
+        renderTable();
+      }
+    }
+
+    function deleteRecord(id) {
+      const record = records.find(r => r.id === id);
+      if (record && record.owner === getCurrentUser()) {
+        if (confirm('Are you sure you want to delete this record?')) {
+          records = records.filter(r => r.id !== id);
+          saveData();
+          renderTable();
+        }
+      }
+    }
+
+    document.getElementById('recordForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      const id = document.getElementById('recordId').value;
+      const recordData = {
+        product: document.getElementById('product').value,
+        productArea: document.getElementById('productArea').value,
+        sessionTitle: document.getElementById('sessionTitle').value,
+        description: document.getElementById('description').value,
+        owner: document.getElementById('owner').value
+      };
+      
+      if (id) {
+        // Edit existing
+        const index = records.findIndex(r => r.id == id);
+        if (index !== -1) {
+          records[index] = { ...records[index], ...recordData };
+        }
+      } else {
+        // Add new
+        records.push({ id: Date.now(), ...recordData });
+      }
+      
+      saveData();
+      renderTable();
+      closeModal();
+    });
+
+    document.getElementById('currentUser').addEventListener('change', renderTable);
+
+    // Check for existing session on load
+    msalInstance.handleRedirectPromise().then(async (response) => {
+      if (response) {
+        accessToken = response.accessToken;
+        document.getElementById('loginStatus').innerHTML = 
+          `✅ Logged in as ${response.account.username} <button class="btn btn-secondary" onclick="logout()">Logout</button>`;
+        loadData();
+      } else {
+        // Check if already logged in
+        const accounts = msalInstance.getAllAccounts();
+        if (accounts.length > 0) {
+          const account = accounts[0];
+          msalInstance.setActiveAccount(account);
+          // Try to acquire token silently
+          try {
+            const tokenResponse = await msalInstance.acquireTokenSilent({
+              scopes: ['Files.ReadWrite', 'Sites.ReadWrite.All'],
+              account: account
+            });
+            accessToken = tokenResponse.accessToken;
+            document.getElementById('loginStatus').innerHTML = 
+              `✅ Logged in as ${account.username} <button class="btn btn-secondary" onclick="logout()">Logout</button>`;
+            loadData();
+          } catch (e) {
+            document.getElementById('loginStatus').innerHTML = 
+              '<button class="btn btn-primary" onclick="login()">🔐 Login with Microsoft</button>';
+          }
+        } else {
+          document.getElementById('loginStatus').innerHTML = 
+            '<button class="btn btn-primary" onclick="login()">🔐 Login with Microsoft</button>';
+        }
+      }
+    });
+
+    // Initial render
+    renderTable();
+  </script>
+</body>
+</html>
