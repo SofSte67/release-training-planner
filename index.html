@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Product Tracker</title>
+  <title>Release Training Planner</title>
   <!-- MSAL for Microsoft authentication -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/msal/1.4.18/msal.min.js"></script>
   <!-- SheetJS for Excel handling -->
@@ -25,9 +25,11 @@
     .btn-secondary:hover { background: #545b62; }
     
     table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee; }
-    th { background: #f8f9fa; font-weight: 600; color: #333; }
+    table th, table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 13px; }
+    th { background: #f8f9fa; font-weight: 600; color: #333; white-space: nowrap; }
     tr:hover { background: #f8f9fa; }
+    
+    .table-wrapper { overflow-x: auto; }
     
     .actions { display: flex; gap: 8px; }
     .btn-edit { background: #28a745; color: white; padding: 6px 12px; font-size: 12px; }
@@ -39,12 +41,14 @@
     
     .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
     .modal.active { display: flex; align-items: center; justify-content: center; }
-    .modal-content { background: white; padding: 25px; border-radius: 8px; width: 500px; max-width: 90%; }
+    .modal-content { background: white; padding: 25px; border-radius: 8px; width: 600px; max-width: 95%; max-height: 90vh; overflow-y: auto; }
     .modal h2 { margin-top: 0; }
     .form-group { margin-bottom: 15px; }
     .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
-    .form-group input, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+    .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
     .form-group textarea { height: 80px; resize: vertical; }
+    .form-group input.error, .form-group textarea.error, .form-group select.error { border-color: #dc3545; }
+    .error-message { color: #dc3545; font-size: 12px; margin-top: 4px; display: none; }
     .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
     
     .empty-state { text-align: center; padding: 40px; color: #666; }
@@ -52,7 +56,7 @@
 </head>
 <body>
   <header>
-    <h1>📋 Product Tracker</h1>
+    <h1>📋 Release Training Planner</h1>
   </header>
 
   <main>
@@ -73,13 +77,23 @@
       <button class="btn btn-secondary" onclick="loadData()">🔄 Refresh</button>
     </div>
 
+    <div class="table-wrapper">
     <table>
       <thead>
         <tr>
           <th>Product</th>
           <th>Product Area</th>
-          <th>Session Title</th>
+          <th>Session Name</th>
           <th>Description</th>
+          <th>Training Level</th>
+          <th>Type of Session</th>
+          <th>Date/Time</th>
+          <th>Duration (min)</th>
+          <th>Adoption Ready</th>
+          <th>Feature Release</th>
+          <th>Restricted Access</th>
+          <th>Limited Available</th>
+          <th>Host</th>
           <th>Owner</th>
           <th>Actions</th>
         </tr>
@@ -87,6 +101,7 @@
       <tbody id="tableBody">
       </tbody>
     </table>
+    </div>
     
     <div id="emptyState" class="empty-state" style="display:none;">
       No records yet. Click "Add New Record" to get started.
@@ -99,26 +114,111 @@
       <h2 id="modalTitle">Add New Record</h2>
       <form id="recordForm">
         <input type="hidden" id="recordId">
+        
         <div class="form-group">
           <label for="product">Product *</label>
           <input type="text" id="product" required>
+          <div class="error-message">This field is required</div>
         </div>
+        
         <div class="form-group">
           <label for="productArea">Product Area *</label>
           <input type="text" id="productArea" required>
+          <div class="error-message">This field is required</div>
         </div>
+        
         <div class="form-group">
-          <label for="sessionTitle">Session Title *</label>
-          <input type="text" id="sessionTitle" required>
+          <label for="sessionName">Session Name *</label>
+          <input type="text" id="sessionName" required>
+          <div class="error-message">This field is required</div>
         </div>
+        
         <div class="form-group">
-          <label for="description">Description</label>
-          <textarea id="description"></textarea>
+          <label for="description">Description *</label>
+          <textarea id="description" required></textarea>
+          <div class="error-message">This field is required</div>
         </div>
+        
+        <div class="form-group">
+          <label for="trainingLevel">Training Level *</label>
+          <select id="trainingLevel" required>
+            <option value="">Select...</option>
+            <option value="1 - Introducing">1 - Introducing</option>
+            <option value="2 - Using">2 - Using</option>
+            <option value="3 - RT for Specific Target Audience">3 - RT for Specific Target Audience</option>
+          </select>
+          <div class="error-message">This field is required</div>
+        </div>
+        
+        <div class="form-group">
+          <label for="typeOfSession">Type of Session *</label>
+          <select id="typeOfSession" required onchange="toggleDateTime()">
+            <option value="">Select...</option>
+            <option value="Live+PDF">Live+PDF</option>
+            <option value="Recording(s) + PDF(s)">Recording(s) + PDF(s)</option>
+            <option value="PDF">PDF</option>
+          </select>
+          <div class="error-message">This field is required</div>
+        </div>
+        
+        <div class="form-group" id="dateTimeGroup">
+          <label for="dateTime">Date/Time *</label>
+          <input type="datetime-local" id="dateTime">
+          <div class="error-message">This field is required for Live+PDF sessions</div>
+        </div>
+        
+        <div class="form-group">
+          <label for="duration">Duration (min) *</label>
+          <input type="number" id="duration" min="3" required>
+          <div class="error-message">Must be at least 3 minutes</div>
+        </div>
+        
+        <div class="form-group">
+          <label for="adoptionReady">Adoption Ready (ex: 2026.07) *</label>
+          <input type="text" id="adoptionReady" required placeholder="YYYY.MM">
+          <div class="error-message">This field is required</div>
+        </div>
+        
+        <div class="form-group">
+          <label for="featureRelease">Feature Release (ex: 2026.10) *</label>
+          <input type="text" id="featureRelease" required placeholder="YYYY.MM">
+          <div class="error-message">This field is required</div>
+        </div>
+        
+        <div class="form-group">
+          <label for="restrictedAccess">Restricted Access *</label>
+          <select id="restrictedAccess" required>
+            <option value="">Select...</option>
+            <option value="Available to all">Available to all</option>
+            <option value="Partners only">Partners only</option>
+            <option value="Infor Only">Infor Only</option>
+            <option value="Inforians & Partners Only">Inforians & Partners Only</option>
+          </select>
+          <div class="error-message">This field is required</div>
+        </div>
+        
+        <div class="form-group">
+          <label for="limitedAvailable">Limited Available *</label>
+          <select id="limitedAvailable" required>
+            <option value="">Select...</option>
+            <option value="No">No</option>
+            <option value="Yes">Yes</option>
+          </select>
+          <div class="error-message">This field is required</div>
+        </div>
+        
+        <div class="form-group">
+          <label for="host">Host (ex: Sofia Stenbakken) *</label>
+          <input type="text" id="host" required>
+          <div class="error-message">This field is required</div>
+        </div>
+        
         <div class="form-group">
           <label for="owner">Owner *</label>
           <input type="text" id="owner" required>
+          <div class="error-message">This field is required</div>
         </div>
+        
         <div class="modal-actions">
           <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
           <button type="submit" class="btn btn-primary">Save</button>
@@ -213,9 +313,18 @@
               id: index + 1,
               product: row[0] || '',
               productArea: row[1] || '',
-              sessionTitle: row[2] || '',
+              sessionName: row[2] || '',
               description: row[3] || '',
-              owner: row[4] || ''
+              trainingLevel: row[4] || '',
+              typeOfSession: row[5] || '',
+              dateTime: row[6] || '',
+              duration: row[7] || '',
+              adoptionReady: row[8] || '',
+              featureRelease: row[9] || '',
+              restrictedAccess: row[10] || '',
+              limitedAvailable: row[11] || '',
+              host: row[12] || '',
+              owner: row[13] || ''
             }));
           } else {
             records = [];
@@ -246,8 +355,8 @@
 
       try {
         // Convert records to Excel format
-        const headerRow = ['Product', 'Product Area', 'Session Title', 'Description', 'Owner'];
-        const dataRows = records.map(r => [r.product, r.productArea, r.sessionTitle, r.description, r.owner]);
+        const headerRow = ['Product', 'Product Area', 'Session Name', 'Description', 'Training Level', 'Type of Session', 'Date/Time', 'Duration (min)', 'Adoption Ready', 'Feature Release', 'Restricted Access', 'Limited Available', 'Host', 'Owner'];
+        const dataRows = records.map(r => [r.product, r.productArea, r.sessionName, r.description, r.trainingLevel, r.typeOfSession, r.dateTime, r.duration, r.adoptionReady, r.featureRelease, r.restrictedAccess, r.limitedAvailable, r.host, r.owner]);
         const allData = [headerRow, ...dataRows];
 
         // Create workbook
@@ -300,8 +409,17 @@
         <tr>
           <td>${escapeHtml(record.product)}</td>
           <td>${escapeHtml(record.productArea)}</td>
-          <td>${escapeHtml(record.sessionTitle)}</td>
+          <td>${escapeHtml(record.sessionName)}</td>
           <td>${escapeHtml(record.description)}</td>
+          <td>${escapeHtml(record.trainingLevel)}</td>
+          <td>${escapeHtml(record.typeOfSession)}</td>
+          <td>${escapeHtml(record.dateTime)}</td>
+          <td>${escapeHtml(record.duration)}</td>
+          <td>${escapeHtml(record.adoptionReady)}</td>
+          <td>${escapeHtml(record.featureRelease)}</td>
+          <td>${escapeHtml(record.restrictedAccess)}</td>
+          <td>${escapeHtml(record.limitedAvailable)}</td>
+          <td>${escapeHtml(record.host)}</td>
           <td>${escapeHtml(record.owner)}</td>
           <td class="actions">
             <button class="btn btn-edit" onclick="editRecord(${record.id})">Edit</button>
@@ -330,8 +448,17 @@
         document.getElementById('recordId').value = record.id;
         document.getElementById('product').value = record.product;
         document.getElementById('productArea').value = record.productArea;
-        document.getElementById('sessionTitle').value = record.sessionTitle;
+        document.getElementById('sessionName').value = record.sessionName;
         document.getElementById('description').value = record.description;
+        document.getElementById('trainingLevel').value = record.trainingLevel;
+        document.getElementById('typeOfSession').value = record.typeOfSession;
+        document.getElementById('dateTime').value = record.dateTime;
+        document.getElementById('duration').value = record.duration;
+        document.getElementById('adoptionReady').value = record.adoptionReady;
+        document.getElementById('featureRelease').value = record.featureRelease;
+        document.getElementById('restrictedAccess').value = record.restrictedAccess;
+        document.getElementById('limitedAvailable').value = record.limitedAvailable;
+        document.getElementById('host').value = record.host;
         document.getElementById('owner').value = record.owner;
       } else {
         title.textContent = 'Add New Record';
@@ -340,7 +467,23 @@
         document.getElementById('owner').value = getCurrentUser();
       }
       
+      toggleDateTime();
       modal.classList.add('active');
+    }
+
+    function toggleDateTime() {
+      const typeOfSession = document.getElementById('typeOfSession').value;
+      const dateTimeGroup = document.getElementById('dateTimeGroup');
+      const dateTimeInput = document.getElementById('dateTime');
+      
+      if (typeOfSession === 'Live+PDF') {
+        dateTimeGroup.style.display = 'block';
+        dateTimeInput.required = true;
+      } else {
+        dateTimeGroup.style.display = 'none';
+        dateTimeInput.required = false;
+        dateTimeInput.value = '';
+      }
     }
 
     function closeModal() {
@@ -358,7 +501,7 @@
         const newRecord = {
           ...record,
           id: Date.now(),
-          sessionTitle: record.sessionTitle + ' (Copy)',
+          sessionName: record.sessionName + ' (Copy)',
           owner: getCurrentUser()
         };
         records.push(newRecord);
@@ -381,12 +524,42 @@
     document.getElementById('recordForm').addEventListener('submit', function(e) {
       e.preventDefault();
       
+      // Clear previous error messages
+      document.querySelectorAll('.error-message').forEach(el => el.style.display = 'none');
+      document.querySelectorAll('.error').forEach(el => el.classList.remove('error'));
+      
+      // Validate duration (must be at least 3)
+      const duration = parseInt(document.getElementById('duration').value);
+      if (duration < 3) {
+        document.getElementById('duration').classList.add('error');
+        document.getElementById('duration').nextElementSibling.style.display = 'block';
+        return;
+      }
+      
+      // Validate Date/Time for Live+PDF
+      const typeOfSession = document.getElementById('typeOfSession').value;
+      const dateTime = document.getElementById('dateTime').value;
+      if (typeOfSession === 'Live+PDF' && !dateTime) {
+        document.getElementById('dateTime').classList.add('error');
+        document.getElementById('dateTime').nextElementSibling.style.display = 'block';
+        return;
+      }
+      
       const id = document.getElementById('recordId').value;
       const recordData = {
         product: document.getElementById('product').value,
         productArea: document.getElementById('productArea').value,
-        sessionTitle: document.getElementById('sessionTitle').value,
+        sessionName: document.getElementById('sessionName').value,
         description: document.getElementById('description').value,
+        trainingLevel: document.getElementById('trainingLevel').value,
+        typeOfSession: document.getElementById('typeOfSession').value,
+        dateTime: typeOfSession === 'Live+PDF' ? dateTime : '',
+        duration: document.getElementById('duration').value,
+        adoptionReady: document.getElementById('adoptionReady').value,
+        featureRelease: document.getElementById('featureRelease').value,
+        restrictedAccess: document.getElementById('restrictedAccess').value,
+        limitedAvailable: document.getElementById('limitedAvailable').value,
+        host: document.getElementById('host').value,
         owner: document.getElementById('owner').value
       };
       
