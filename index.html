@@ -613,24 +613,35 @@
     document.getElementById('currentUser').addEventListener('change', renderTable);
 
     // Check for existing session on load
-    msalInstance.handleRedirectPromise().then(async (response) => {
-      if (response) {
-        accessToken = response.accessToken;
-        document.getElementById('loginStatus').innerHTML = 
-          `✅ Logged in as ${response.account.username} <button class="btn btn-secondary" onclick="logout()">Logout</button>`;
-        loadData();
-      } else {
-        // Check if already logged in
-        const accounts = msalInstance.getAllAccounts();
-        if (accounts.length > 0) {
-          const account = accounts[0];
-          msalInstance.setActiveAccount(account);
-          // Try to acquire token silently
-          try {
-            const tokenResponse = await msalInstance.acquireTokenSilent({
-              scopes: ['Files.ReadWrite', 'Sites.ReadWrite.All'],
-              account: account
-            });
+    // Check for existing session on load
+msalInstance.handleRedirectPromise().then(async () => {
+  try {
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length === 0) {
+      console.log("No user logged in yet");
+      return;
+    }
+
+    const account = accounts[0];
+    msalInstance.setActiveAccount(account);
+
+    // 🔑 THIS is what actually enables Excel saving
+    const tokenResponse = await msalInstance.acquireTokenSilent({
+      scopes: ['Files.ReadWrite', 'Sites.ReadWrite.All'],
+      account: account
+    });
+
+    accessToken = tokenResponse.accessToken;
+
+    document.getElementById('loginStatus').innerHTML =
+      `✅ Logged in as ${account.username} <button class="btn btn-secondary" onclick="logout()">Logout</button>`;
+
+    console.log("✅ Access token acquired");
+    loadData();
+  } catch (error) {
+    console.error("Token acquisition failed:", error);
+  }
+});
             accessToken = tokenResponse.accessToken;
             document.getElementById('loginStatus').innerHTML = 
               `✅ Logged in as ${account.username} <button class="btn btn-secondary" onclick="logout()">Logout</button>`;
