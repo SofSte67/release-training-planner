@@ -638,6 +638,17 @@ if (uploadResponse.ok) {
     });
 
     document.getElementById('currentUser').addEventListener('change', renderTable);
+    function showLoggedInUI() {
+  const acct = msalInstance.getActiveAccount();
+  const name = acct?.name || acct?.username || "Signed in";
+
+  document.getElementById("loginStatus").innerHTML = `
+    <div style="display:flex; gap:10px; align-items:center;">
+      <span>✅ ${escapeHtml(name)}</span>
+      <button class="btn btn-secondary" onclick="logout()">Logout</button>
+    </div>
+  `;
+}
     // --- MSAL bootstrap: MUST run on every page load ---
 (async function msalBoot() {
   try {
