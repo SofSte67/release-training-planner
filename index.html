@@ -288,7 +288,23 @@
 
     const msalInstance = new msal.PublicClientApplication(msalConfig);
     let accessToken = null;
+async function getDriveId() {
+  const siteRes = await fetch(
+    `https://graph.microsoft.com/v1.0/sites/inforonline.sharepoint.com:/${CONFIG.sitePath}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!siteRes.ok) throw new Error("Failed to resolve site");
+  const site = await siteRes.json();
 
+  const driveRes = await fetch(
+    `https://graph.microsoft.com/v1.0/sites/${site.id}/drive`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!driveRes.ok) throw new Error("Failed to resolve drive");
+  const drive = await driveRes.json();
+
+  return drive.id;
+}
     // Login function
     async function login() {
   try {
@@ -398,7 +414,10 @@
         const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
         // Upload to SharePoint
-        const uploadUrl = `https://graph.microsoft.com/v1.0/sites/inforonline.sharepoint.com:/${CONFIG.sitePath}:/drive/root:/${CONFIG.excelFileName}:/content`;
+        const driveId = await getDriveId();
+
+const uploadUrl =
+  `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${CONFIG.excelFileName}:/content`;
         
         const uploadResponse = await fetch(uploadUrl, {
           method: 'PUT',
