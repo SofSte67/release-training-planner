@@ -411,11 +411,21 @@
           body: blob
         });
 
-        if (uploadResponse.ok) {
-          console.log('✅ Data saved to Excel!');
-        } else {
-          console.error('Failed to save to Excel:', uploadResponse.status);
-        }
+        
+if (uploadResponse.ok) {
+  console.log('✅ Data saved to Excel!');
+} else {
+  const errorText = await uploadResponse.text();
+  console.error('❌ Failed to save to Excel');
+  console.error('Status:', uploadResponse.status);
+  console.error('Response:', errorText);
+  alert(
+    'Excel save failed.\n\n' +
+    'Status: ' + uploadResponse.status + '\n\n' +
+    errorText
+  );
+}
+
       } catch (error) {
         console.error('Error saving to Excel:', error);
       }
