@@ -621,54 +621,50 @@ if (uploadResponse.ok) {
     });
 
     document.getElementById('currentUser').addEventListener('change', renderTable);
-
-    // Check for existing session on load
-    // Check for existing session on load
-msalInstance.handleRedirectPromise().then(async () => {
-  try {
-    const accounts = msalInstance.getAllAccounts();
-    if (accounts.length === 0) {
-      console.log("No user logged in yet");
-      return;
-    }
-
-    const account = accounts[0];
-    msalInstance.setActiveAccount(account);
-
-    // 🔑 THIS is what actually enables Excel saving
-    const tokenResponse = await msalInstance.acquireTokenSilent({
-      scopes: ['Files.ReadWrite', 'Sites.ReadWrite.All'],
-      account: account
-    });
-
-    accessToken = tokenResponse.accessToken;
-
-    document.getElementById('loginStatus').innerHTML =
-      `✅ Logged in as ${account.username} <button class="btn btn-secondary" onclick="logout()">Logout</button>`;
-
-    console.log("✅ Access token acquired");
-    loadData();
-  } catch (error) {
-    console.error("Token acquisition failed:", error);
-  }
-});
-            accessToken = tokenResponse.accessToken;
-            document.getElementById('loginStatus').innerHTML = 
-              `✅ Logged in as ${account.username} <button class="btn btn-secondary" onclick="logout()">Logout</button>`;
-            loadData();
-          } catch (e) {
-            document.getElementById('loginStatus').innerHTML = 
-              '<button class="btn btn-primary" onclick="login()">🔐 Login with Microsoft</button>';
-          }
-        } else {
-          document.getElementById('loginStatus').innerHTML = 
-            '<button class="btn btn-primary" onclick="login()">🔐 Login with Microsoft</button>';
-        }
-      }
-    });
-
-    // Initial render
-    renderTable();
   </script>
+  
+// Initial table render so UI works immediately
+  renderTable();
+
+  window.addEventListener("DOMContentLoaded", async () => {
+    try {
+      const redirectResult = await msalInstance.handleRedirectPromise();
+
+      const account =
+        (redirectResult && redirectResult.account) ||
+        msalInstance.getAllAccounts()[0];
+
+      if (!account) {
+        document.getElementById('loginStatus').innerHTML =
+          '<button class="btn btn-primary" id="loginBtn">🔐 Login with Microsoft</button>';
+        document.getElementById('loginBtn').addEventListener('click', login);
+        return;
+      }
+
+      msalInstance.setActiveAccount(account);
+
+      const tokenResponse = await msalInstance.acquireTokenSilent({
+        scopes: ['Files.ReadWrite', 'Sites.ReadWrite.All'],
+        account
+      });
+
+      accessToken = tokenResponse.accessToken;
+
+      document.getElementById('loginStatus').innerHTML =
+        `✅ Logged in as ${account.username}
+         <button class="btn btn-secondary" id="logoutBtn">Logout</button>`;
+
+      document.getElementById('logoutBtn').addEventListener('click', logout);
+
+      await loadData();
+    } catch (err) {
+      console.error(err);
+      document.getElementById('loginStatus').innerHTML =
+        '<button class="btn btn-primary" id="loginBtn">🔐 Login with Microsoft</button>';
+      document.getElementById('loginBtn').addEventListener('click', login);
+    }
+  });
+</script>
+
 </body>
 </html>
