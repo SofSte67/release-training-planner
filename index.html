@@ -85,6 +85,7 @@
         <div id="loginStatus">
           <button class="btn btn-primary" onclick="login()">🔐 Login with Microsoft</button>
         </div>
+        <div id="debugBox" style="margin-top:10px; padding:10px; background:#fff3cd; border:1px solid #ffeeba; border-radius:6px; display:none; white-space:pre-wrap;"></div>
       </div>
     </div>
 
@@ -246,6 +247,21 @@
   <script>
     // Initialize data (will be loaded from Excel when logged in)
     let records = [];
+    function showDebug(message) {
+  let box = document.getElementById('debugBox');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'debugBox';
+    box.style.margin = '10px 0';
+    box.style.padding = '10px';
+    box.style.background = '#fff3cd';
+    box.style.border = '1px solid #ffeeba';
+    box.style.borderRadius = '6px';
+    box.style.whiteSpace = 'pre-wrap';
+    document.body.prepend(box);
+  }
+  box.textContent = String(message);
+}
 
     // ============================================
     // CONFIGURATION - Update these values
@@ -275,20 +291,19 @@
 
     // Login function
     async function login() {
-      try {
-        const response = await msalInstance.loginPopup({
-  scopes: ['Files.ReadWrite', 'Sites.ReadWrite.All'],
-  prompt: 'select_account'
-});
-        accessToken = response.accessToken;
-        document.getElementById('loginStatus').innerHTML = 
-          `✅ Logged in as ${response.account.username} <button class="btn btn-secondary" onclick="logout()">Logout</button>`;
-        loadData();
-      } catch (error) {
-        console.error('Login failed:', error);
-        alert('Login failed. Please try again.');
-      }
-    }
+  try {
+    showDebug("Starting Microsoft login...");
+
+    const response = await msalInstance.loginRedirect({
+      scopes: ['Files.ReadWrite', 'Sites.ReadWrite.All'],
+      prompt: 'select_account'
+    });
+
+  } catch (error) {
+    console.error("Login failed:", error);
+    showDebug("❌ Login failed:\n\n" + (error?.message || JSON.stringify(error)));
+  }
+}
 
     // Logout function
     function logout() {
