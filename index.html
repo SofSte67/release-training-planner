@@ -53,6 +53,21 @@
     .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
     
     .empty-state { text-align: center; padding: 40px; color: #666; }
+    /* ✅ FIX: make modal clickable and typeable */
+.modal {
+  z-index: 99999;
+}
+
+.modal-content {
+  position: relative;
+  z-index: 100000;
+}
+
+.modal,
+.modal-content,
+.modal-content * {
+  pointer-events: auto;
+}
   </style>
 </head>
 <body>
