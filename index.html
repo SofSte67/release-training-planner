@@ -265,7 +265,7 @@
       auth: {
         clientId: CONFIG.clientId,
         authority: `https://login.microsoftonline.com/${CONFIG.tenantId}`,
-        redirectUri: window.location.href
+        redirectUri: 'https://sofste67.github.io/release-training-planner/'
       },
       cache: { cacheLocation: 'sessionStorage' }
     };
@@ -276,10 +276,10 @@
     // Login function
     async function login() {
       try {
-        const loginRequest = {
-          scopes: ['Files.ReadWrite', 'Sites.ReadWrite.All']
-        };
-        const response = await msalInstance.loginPopup(loginRequest);
+        const response = await msalInstance.loginPopup({
+  scopes: ['Files.ReadWrite', 'Sites.ReadWrite.All'],
+  prompt: 'select_account'
+});
         accessToken = response.accessToken;
         document.getElementById('loginStatus').innerHTML = 
           `✅ Logged in as ${response.account.username} <button class="btn btn-secondary" onclick="logout()">Logout</button>`;
