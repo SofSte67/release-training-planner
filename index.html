@@ -1,6 +1,7 @@
 
 <!DOCTYPE html>
 <html lang="en">
+  const FILE_PATH = "SiteAssets/2026_Oct_RTP.xlsx";
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -337,11 +338,16 @@ async function getDriveId() {
       }
 
       try {
-        // Get file from SharePoint using Graph API
-        const response = await fetch(
-          `https://graph.microsoft.com/v1.0/sites/inforonline.sharepoint.com:/${CONFIG.sitePath}:/drive/root:/${CONFIG.excelFileName}:/content`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
+       // ✅ Resolve drive first (same as saveData)
+const driveId = await getDriveId();
+
+// ✅ Correct path for Site Assets
+const response = await fetch(
+  `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/SiteAssets/2026_Oct_RTP.xlsx:/content`,
+  {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  }
+);
 
         if (response.ok) {
           const buffer = await response.arrayBuffer();
@@ -415,9 +421,10 @@ async function getDriveId() {
 
         // Upload to SharePoint
         const driveId = await getDriveId();
-
+ 
 const uploadUrl =
-  `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${CONFIG.excelFileName}:/content`;
+  `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${FILE_PATH}:/content`;
+
         
         const uploadResponse = await fetch(uploadUrl, {
           method: 'PUT',
