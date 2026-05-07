@@ -292,13 +292,11 @@
     // Login function
     async function login() {
   try {
-    showDebug("Starting Microsoft login...");
-
-    const response = await msalInstance.loginRedirect({
-      scopes: ['Files.ReadWrite', 'Sites.ReadWrite.All'],
-      prompt: 'select_account'
+    showDebug("Starting Microsoft login (redirect)...");
+    await msalInstance.loginRedirect({
+      scopes: ["Files.ReadWrite", "Sites.ReadWrite.All"],
+      prompt: "select_account"
     });
-
   } catch (error) {
     console.error("Login failed:", error);
     showDebug("❌ Login failed:\n\n" + (error?.message || JSON.stringify(error)));
@@ -621,6 +619,51 @@ if (uploadResponse.ok) {
     });
 
     document.getElementById('currentUser').addEventListener('change', renderTable);
+    // --- MSAL bootstrap: MUST run on every page load ---
+(async function msalBoot() {
+  try {
+    // Process the redirect response if we just came back from loginRedirect/acquireTokenRedirect
+    const redirectResult = await msalInstance.handleRedirectPromise();
+
+    if (redirectResult?.account) {
+      msalInstance.setActiveAccount(redirectResult.account);
+    } else {
+      // If already signed in previously (cache), pick the first account
+      const accounts = msalInstance.getAllAccounts();
+      if (accounts.length > 0) msalInstance.setActiveAccount(accounts[0]);
+    }
+
+    // If we have an account, fetch a token and update UI
+    if (msalInstance.getActiveAccount()) {
+      await getAccessToken();     // <-- sets global accessToken
+      showLoggedInUI();
+      await loadData();           // optional: auto-load after login
+    } else {
+      showDebug("Not signed in yet. Select 'Login with Microsoft'.");
+    }
+  } catch (e) {
+    console.error(e);
+    showDebug("❌ MSAL boot error:\n\n" + (e?.message || String(e)));
+  }
+})();
+    async function getAccessToken() {
+  const request = {
+    scopes: ["Files.ReadWrite", "Sites.ReadWrite.All"],
+    account: msalInstance.getActiveAccount()
+  };
+
+  try {
+    const result = await msalInstance.acquireTokenSilent(request);
+    accessToken = result.accessToken;
+    showDebug("✅ Token acquired silently.");
+    return accessToken;
+  } catch (err) {
+    console.warn("Silent token failed, switching to redirect", err);
+    showDebug("⚠️ Silent token failed, redirecting for consent/token...\n\n" + (err?.message || String(err)));
+    // This will redirect away; code after it will NOT run until you return
+    await msalInstance.acquireTokenRedirect(request);
+  }
+}
   </script>
 
 </body>
