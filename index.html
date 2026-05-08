@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Release Training Planner</title>
+  <title>Release Training Planner (Excel Event Log)</title>
 
-  <!-- ✅ MSAL for Microsoft authentication (fixes the "URL printed on page" issue) -->
+  <!-- MSAL for Microsoft authentication -->
   <script src="https://alcdn.msauth.net/browser/2.38.1/js/msal-browser.min.js"></script>
 
   <style>
@@ -16,8 +16,889 @@
       background: #f5f5f5; color:#222;
     }
     h1 { margin: 0 0 14px; }
-
     .user-bar {
       background: #fff; padding: 15px; border-radius: 12px; margin-bottom: 18px;
       box-shadow: 0 2px 6px rgba(0,0,0,0.08);
     }
+    .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    .grow { flex:1; min-width:260px; }
+    label { font-weight: 600; margin-right: 8px; }
+    input[type="text"] {
+      padding: 9px 12px; border: 1px solid #ddd; border-radius: 8px;
+      font-size: 14px; width: 260px;
+    }
+    .status {
+      font-size: 13px; color:#555;
+      background:#f6f7f9; border:1px solid #e7e9ef;
+      padding:8px 10px; border-radius:10px;
+    }
+    .toolbar { margin: 12px 0 14px; display:flex; gap:10px; flex-wrap:wrap; }
+    .btn {
+      padding: 10px 16px; border: none; border-radius: 10px; cursor: pointer;
+      font-size: 14px; font-weight:600;
+    }
+    .btn-primary { background: #0078d4; color: white; }
+    .btn-primary:hover { background: #005a9e; }
+    .btn-secondary { background: #6c757d; color: white; }
+    .btn-secondary:hover { background: #545b62; }
+    .btn-danger { background:#dc3545; color:#fff; }
+    .btn-danger:hover { background:#b02a37; }
+    .btn:disabled { opacity:0.6; cursor:not-allowed; }
+
+    .table-wrapper { overflow-x:auto; }
+    table {
+      width: 100%; border-collapse: collapse; background: white;
+      border-radius: 14px; overflow: hidden;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+      min-width: 1050px;
+    }
+    th, td {
+      padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee;
+      font-size: 13px; vertical-align: top;
+    }
+    th { background: #f8f9fa; font-weight: 700; color:#333; white-space: nowrap; }
+    tr:hover { background: #f8f9fa; }
+    .actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .btn-sm { padding: 7px 10px; border-radius: 10px; font-size: 12px; }
+
+    .empty-state {
+      text-align:center; padding: 40px 18px; color:#666; background:#fff;
+      border-radius: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+
+    .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index: 99999; }
+    .modal.active { display:flex; align-items:center; justify-content:center; }
+    .modal-content {
+      background:#fff; padding:22px; border-radius: 16px; width: 720px; max-width: 95%;
+      max-height: 90vh; overflow:auto; box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+    }
+    .modal h2 { margin: 0 0 12px; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-group label { display:block; margin: 0 0 6px; font-weight: 600; }
+    .form-group input, .form-group textarea, .form-group select {
+      width:100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 10px; font-size: 14px;
+    }
+    textarea { height: 90px; resize: vertical; }
+    .hint { font-size: 12px; color:#666; margin-top: 6px; }
+    .error { border-color: #dc3545 !important; }
+    .error-message { color:#dc3545; font-size:12px; display:none; margin-top: 6px; }
+    .modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top: 16px; flex-wrap:wrap; }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+    }
+    #debugBox {
+      margin-top: 10px; padding: 10px; background: #fff3cd; border: 1px solid #ffeeba;
+      border-radius: 10px; display:none; white-space: pre-wrap;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>📋 Release Training Planner</h1>
+  </header>
+
+  <main>
+    <div class="user-bar">
+      <div class="row">
+                <div id="loginStatus" class="row">
+          <button class="btn btn-primary" onclick="login()">🔐 Login with Microsoft</button>
+        </div>
+
+        <div class="status" id="appStatus">Not signed in.</div>
+      </div>
+      <div id="debugBox" class="mono"></div>
+    </div>
+
+    <div class="toolbar">
+      <button class="btn btn-primary" onclick="openModal()">+ Add New Record</button>
+      <button class="btn btn-secondary" onclick="loadData()">🔄 Refresh</button>
+      <button class="btn btn-secondary" onclick="toggleDebug()">🧪 Debug</button>
+    </div>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Product Area</th>
+            <th>Session Name</th>
+            <th>Description</th>
+            <th>Training Level</th>
+            <th>Type of Session</th>
+            <th>Date/Time</th>
+            <th>Duration</th>
+            <th>Adoption Ready</th>
+            <th>Feature Release</th>
+            <th>Restricted Access</th>
+            <th>Limited Available</th>
+            <th>Host</th>
+            <th>Owner</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+
+    <div id="emptyState" class="empty-state" style="display:none;">
+      No records yet. Select <strong>+ Add New Record</strong> to get started.
+    </div>
+  </main>
+
+  <!-- Modal -->
+  <div id="recordModal" class="modal">
+    <div class="modal-content">
+      <h2 id="modalTitle">Add New Record</h2>
+      <form id="recordForm">
+        <input type="hidden" id="recordId" />
+
+        <div class="grid">
+          <div class="form-group">
+            <label for="product">Product *</label>
+            <input type="text" id="product" required />
+            <div class="error-message">Required</div>
+          </div>
+
+          <div class="form-group">
+            <label for="productArea">Product Area *</label>
+            <input type="text" id="productArea" required />
+            <div class="error-message">Required</div>
+          </div>
+
+          <div class="form-group" style="grid-column:1 / -1;">
+            <label for="sessionName">Session Name *</label>
+            <input type="text" id="sessionName" required />
+            <div class="error-message">Required</div>
+          </div>
+
+          <div class="form-group" style="grid-column:1 / -1;">
+            <label for="description">Description *</label>
+            <textarea id="description" required></textarea>
+            <div class="error-message">Required</div>
+          </div>
+
+          <div class="form-group">
+            <label for="trainingLevel">Training Level *</label>
+            <select id="trainingLevel" required>
+              <option value="">Select...</option>
+              <option value="1 - Introducing">1 - Introducing</option>
+              <option value="2 - Using">2 - Using</option>
+              <option value="3 - RT for Specific Target Audience">3 - RT for Specific Target Audience</option>
+            </select>
+            <div class="error-message">Required</div>
+          </div>
+
+          <div class="form-group">
+            <label for="typeOfSession">Type of Session *</label>
+            <select id="typeOfSession" required onchange="toggleDateTime()">
+              <option value="">Select...</option>
+              <option value="Live+PDF">Live+PDF</option>
+              <option value="Recording(s) + PDF(s)">Recording(s) + PDF(s)</option>
+              <option value="PDF">PDF</option>
+            </select>
+            <div class="error-message">Required</div>
+          </div>
+
+          <div class="form-group" id="dateTimeGroup">
+            <label for="dateTime">Date/Time *</label>
+            <input type="datetime-local" id="dateTime" />
+            <div class="error-message">Required for Live+PDF</div>
+          </div>
+
+          <div class="form-group">
+            <label for="duration">Duration (min) *</label>
+            <input type="number" id="duration" min="3" required />
+            <div class="error-message">Must be at least 3</div>
+          </div>
+
+          <div class="form-group">
+            <label for="adoptionReady">Adoption Ready (ex: 2026.07) *</label>
+            <input type="text" id="adoptionReady" required placeholder="YYYY.MM" />
+            <div class="error-message">Required</div>
+          </div>
+
+          <div class="form-group">
+            <label for="featureRelease">Feature Release (ex: 2026.10) *</label>
+            <input type="text" id="featureRelease" required placeholder="YYYY.MM" />
+            <div class="error-message">Required</div>
+          </div>
+
+          <div class="form-group">
+            <label for="restrictedAccess">Restricted Access *</label>
+            <select id="restrictedAccess" required>
+              <option value="">Select...</option>
+              <option value="Available to all">Available to all</option>
+              <option value="Partners only">Partners only</option>
+              <option value="Infor Only">Infor Only</option>
+              <option value="Inforians & Partners Only">Inforians & Partners Only</option>
+            </select>
+            <div class="error-message">Required</div>
+          </div>
+
+          <div class="form-group">
+            <label for="limitedAvailable">Limited Available *</label>
+            <select id="limitedAvailable" required>
+              <option value="">Select...</option>
+              <option value="No">No</option>
+              <option value="Yes">Yes</option>
+            </select>
+            <div class="error-message">Required</div>
+          </div>
+
+          <div class="form-group">
+            <label for="host">Host (ex: Sofia Stenbakken) *</label>
+            <input type="text" id="host" required />
+            <div class="error-message">Required</div>
+          </div>
+
+          <div class="form-group">
+            <label for="owner">Owner *</label>
+            <input type="text" id="owner" required />
+            <div class="error-message">Required</div>
+            <div class="hint">For safety, only the Owner can soft-delete a record.</div>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="saveBtn">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    /************************************************************
+     * WHY THIS DESIGN IS SAFE
+     * - We NEVER upload/replace the workbook (no PUT .../content),
+     *   because that overwrites the entire file. (Graph doc: upload/replace)
+     * - Instead we append rows to an Excel TABLE using:
+     *   POST .../workbook/tables/{table}/rows/add with index:null (append).
+     ************************************************************/
+
+    // =========================
+    // CONFIG (EDIT THESE 3)
+    // =========================
+    const CONFIG = {
+      clientId: "aa12b8cf-940a-4415-badf-13e1fef050a9",
+      tenantId: "457d5685-0467-4d05-b23b-8f817adda47c",
+
+      // This must match your SharePoint site path segment
+      // Example: "sites/LaunchManagementOperations"
+      sitePath: "sites/LaunchManagementOperations",
+
+      // Document library that contains the Excel file
+      libraryName: "Additional Resources"
+    };
+
+    // Path INSIDE the library (do NOT include the library name)
+    // Example: "Release Training Plan/2026.10/2026_Oct_RTP.xlsx"
+    const FILE_PATH = "Release Training Plan/2026.10/2026_Oct_RTP.xlsx";
+
+    // Excel TABLE name inside the workbook for the event log
+    // Must match the table you create in Excel (Insert -> Table -> Table Name)
+    const TABLE_NAME = "RTPEvents";
+
+    // Column indexes in RTPEvents table (must match the order you create in Excel)
+    const COL = {
+      EventId: 0,
+      RecordId: 1,
+      Action: 2,
+      EventTimeUtc: 3,
+      Actor: 4,
+      Product: 5,
+      ProductArea: 6,
+      SessionName: 7,
+      Description: 8,
+      TrainingLevel: 9,
+      TypeOfSession: 10,
+      DateTime: 11,
+      Duration: 12,
+      AdoptionReady: 13,
+      FeatureRelease: 14,
+      RestrictedAccess: 15,
+      LimitedAvailable: 16,
+      Host: 17,
+      Owner: 18
+    };
+
+    // =========================
+    // MSAL SETUP
+    // =========================
+    const msalConfig = {
+      auth: {
+        clientId: CONFIG.clientId,
+        authority: `https://login.microsoftonline.com/${CONFIG.tenantId}`,
+        // Your GitHub Pages URL:
+        redirectUri: window.location.origin + window.location.pathname
+      },
+      cache: { cacheLocation: "sessionStorage" }
+    };
+
+    const msalInstance = new msal.PublicClientApplication(msalConfig);
+
+    let accessToken = null;
+    let cachedDriveId = null;
+    let debugEnabled = false;
+
+    // UI state derived from event log:
+    // records: [{recordId, product, ..., owner, deleted:false}]
+    let records = [];
+
+    function toggleDebug() {
+      debugEnabled = !debugEnabled;
+      const box = document.getElementById("debugBox");
+      box.style.display = debugEnabled ? "block" : "none";
+      if (debugEnabled) showDebug("Debug enabled.");
+    }
+
+    function showDebug(message) {
+      if (!debugEnabled) return;
+      const box = document.getElementById("debugBox");
+      box.style.display = "block";
+      box.textContent = String(message);
+    }
+
+    function setStatus(text) {
+      document.getElementById("appStatus").textContent = text;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text ?? "";
+      return div.innerHTML;
+    }
+
+    function guid() {
+      if (crypto && crypto.randomUUID) return crypto.randomUUID();
+      // Fallback:
+      return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        const v = c === "x" ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+    
+    function getActor() {
+  const acct = msalInstance.getActiveAccount();
+  return acct?.username || acct?.name || "Anonymous";
+}
+
+    async function login() {
+      try {
+        showDebug("Starting Microsoft login (redirect)...");
+        await msalInstance.loginRedirect({
+          scopes: ["Files.ReadWrite", "Sites.ReadWrite.All"],
+          prompt: "select_account"
+        });
+      } catch (e) {
+        showDebug("Login failed: " + (e?.message || String(e)));
+        alert("Login failed: " + (e?.message || String(e)));
+      }
+    }
+
+    function logout() {
+      msalInstance.logoutRedirect();
+    }
+
+    function showLoggedInUI() {
+      const acct = msalInstance.getActiveAccount();
+      const name = acct?.name || acct?.username || "Signed in";
+      document.getElementById("loginStatus").innerHTML = `
+        <div class="row">
+          <div class="status">✅ ${escapeHtml(name)}</div>
+          <button class="btn btn-secondary" onclick="logout()">Logout</button>
+        </div>`;
+    }
+
+    async function getAccessToken() {
+      const request = {
+        scopes: ["Files.ReadWrite", "Sites.ReadWrite.All"],
+        account: msalInstance.getActiveAccount()
+      };
+
+      try {
+        const result = await msalInstance.acquireTokenSilent(request);
+        accessToken = result.accessToken;
+        showDebug("Token acquired silently.");
+        return accessToken;
+      } catch (err) {
+        showDebug("Silent token failed, redirecting: " + (err?.message || String(err)));
+        await msalInstance.acquireTokenRedirect(request);
+      }
+    }
+
+    // =========================
+    // DRIVE RESOLUTION (SharePoint library)
+    // =========================
+    async function getDriveId() {
+      if (cachedDriveId) return cachedDriveId;
+      if (!accessToken) throw new Error("No access token");
+
+      // 1) Resolve site by path
+      const siteRes = await fetch(
+        `https://graph.microsoft.com/v1.0/sites/inforonline.sharepoint.com:/${CONFIG.sitePath}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      if (!siteRes.ok) {
+        const t = await siteRes.text();
+        throw new Error("Cannot resolve site. " + t);
+      }
+      const site = await siteRes.json();
+
+      // 2) List drives (document libraries)
+      const drivesRes = await fetch(
+        `https://graph.microsoft.com/v1.0/sites/${site.id}/drives`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      if (!drivesRes.ok) {
+        const t = await drivesRes.text();
+        throw new Error("Cannot list drives. " + t);
+      }
+      const drives = await drivesRes.json();
+
+      // 3) Find target library
+      const target = drives.value.find(d => d.name === CONFIG.libraryName);
+      if (!target) {
+        const names = drives.value.map(d => d.name).join(", ");
+        throw new Error(`Library not found: ${CONFIG.libraryName}. Available: ${names}`);
+      }
+
+      cachedDriveId = target.id;
+      return cachedDriveId;
+    }
+
+    // =========================
+    // EXCEL TABLE API (append-only)
+    // =========================
+    async function graphGetAll(url) {
+      // Handles pagination with @odata.nextLink if present
+      let all = [];
+      let next = url;
+      while (next) {
+        const res = await fetch(next, {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        if (!res.ok) {
+          const t = await res.text();
+          throw new Error(`GET failed (${res.status}): ${t}`);
+        }
+        const json = await res.json();
+        if (Array.isArray(json.value)) all = all.concat(json.value);
+        next = json["@odata.nextLink"] || null;
+      }
+      return all;
+    }
+
+    async function appendEventRow(valuesRow) {
+      const driveId = await getDriveId();
+
+      const url =
+        `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${encodeURI(FILE_PATH)}:/workbook/tables/${TABLE_NAME}/rows/add`;
+
+      // index: null => append to end (Graph Excel docs)
+      const body = { index: null, values: [ valuesRow ] };
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+      });
+
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(`Append failed (${res.status}): ${t}`);
+      }
+      return await res.json();
+    }
+
+    async function loadEvents() {
+      const driveId = await getDriveId();
+      const url =
+        `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${encodeURI(FILE_PATH)}:/workbook/tables/${TABLE_NAME}/rows`;
+
+      // Returns workbookTableRow collection; each row has .values
+      const rows = await graphGetAll(url);
+      return rows;
+    }
+
+    function reduceEventsToRecords(rows) {
+      // Process in order; last event wins for each RecordId
+      const map = new Map();
+
+      for (const r of rows) {
+        const v = (r.values && r.values[0]) ? r.values[0] : null;
+        if (!v) continue;
+
+        const recordId = v[COL.RecordId] || "";
+        const action = v[COL.Action] || "";
+        if (!recordId) continue;
+
+        if (action === "Delete") {
+          const prev = map.get(recordId) || {};
+          map.set(recordId, { ...prev, recordId, deleted: true, _lastEventTime: v[COL.EventTimeUtc] || "" });
+          continue;
+        }
+
+        // Upsert
+        map.set(recordId, {
+          recordId,
+          deleted: false,
+          eventId: v[COL.EventId] || "",
+          eventTimeUtc: v[COL.EventTimeUtc] || "",
+          actor: v[COL.Actor] || "",
+          product: v[COL.Product] || "",
+          productArea: v[COL.ProductArea] || "",
+          sessionName: v[COL.SessionName] || "",
+          description: v[COL.Description] || "",
+          trainingLevel: v[COL.TrainingLevel] || "",
+          typeOfSession: v[COL.TypeOfSession] || "",
+          dateTime: v[COL.DateTime] || "",
+          duration: v[COL.Duration] || "",
+          adoptionReady: v[COL.AdoptionReady] || "",
+          featureRelease: v[COL.FeatureRelease] || "",
+          restrictedAccess: v[COL.RestrictedAccess] || "",
+          limitedAvailable: v[COL.LimitedAvailable] || "",
+          host: v[COL.Host] || "",
+          owner: v[COL.Owner] || ""
+        });
+      }
+
+      // Keep only not-deleted
+      const list = Array.from(map.values()).filter(x => !x.deleted);
+      return list;
+    }
+
+    // =========================
+    // UI RENDERING
+    // =========================
+    function renderTable() {
+      const tbody = document.getElementById("tableBody");
+      const empty = document.getElementById("emptyState");
+
+      if (!records || records.length === 0) {
+        tbody.innerHTML = "";
+        empty.style.display = "block";
+        return;
+      }
+
+      empty.style.display = "none";
+      tbody.innerHTML = records.map(rec => `
+        <tr>
+          <td>${escapeHtml(rec.product)}</td>
+          <td>${escapeHtml(rec.productArea)}</td>
+          <td>${escapeHtml(rec.sessionName)}</td>
+          <td>${escapeHtml(rec.description)}</td>
+          <td>${escapeHtml(rec.trainingLevel)}</td>
+          <td>${escapeHtml(rec.typeOfSession)}</td>
+          <td>${escapeHtml(rec.dateTime)}</td>
+          <td>${escapeHtml(rec.duration)}</td>
+          <td>${escapeHtml(rec.adoptionReady)}</td>
+          <td>${escapeHtml(rec.featureRelease)}</td>
+          <td>${escapeHtml(rec.restrictedAccess)}</td>
+          <td>${escapeHtml(rec.limitedAvailable)}</td>
+          <td>${escapeHtml(rec.host)}</td>
+          <td>${escapeHtml(rec.owner)}</td>
+          <td>
+            <div class="actions">
+              <button class="btn btn-sm btn-secondary" onclick="editRecord('${rec.recordId}')">Edit</button>
+              <button class="btn btn-sm btn-secondary" onclick="duplicateRecord('${rec.recordId}')">Duplicate</button>
+              ${
+                rec.owner === getCurrentUserName()
+                  ? `<button class="btn btn-sm btn-danger" onclick="softDeleteRecord('${rec.recordId}')">Delete</button>`
+                  : `<button class="btn btn-sm btn-danger" disabled title="Only the Owner can delete">Delete</button>`
+              }
+            </div>
+          </td>
+        </tr>
+      `).join("");
+    }
+
+    // =========================
+    // MODAL
+    // =========================
+    function openModal(record = null) {
+      const modal = document.getElementById("recordModal");
+      const form = document.getElementById("recordForm");
+      const title = document.getElementById("modalTitle");
+
+      // clear validation UI
+      document.querySelectorAll(".error-message").forEach(el => el.style.display = "none");
+      document.querySelectorAll(".error").forEach(el => el.classList.remove("error"));
+
+      if (record) {
+        title.textContent = "Edit Record";
+        document.getElementById("recordId").value = record.recordId;
+        document.getElementById("product").value = record.product || "";
+        document.getElementById("productArea").value = record.productArea || "";
+        document.getElementById("sessionName").value = record.sessionName || "";
+        document.getElementById("description").value = record.description || "";
+        document.getElementById("trainingLevel").value = record.trainingLevel || "";
+        document.getElementById("typeOfSession").value = record.typeOfSession || "";
+        document.getElementById("dateTime").value = record.dateTime || "";
+        document.getElementById("duration").value = record.duration || "";
+        document.getElementById("adoptionReady").value = record.adoptionReady || "";
+        document.getElementById("featureRelease").value = record.featureRelease || "";
+        document.getElementById("restrictedAccess").value = record.restrictedAccess || "";
+        document.getElementById("limitedAvailable").value = record.limitedAvailable || "";
+        document.getElementById("host").value = record.host || "";
+        document.getElementById("owner").value = record.owner || getCurrentUserName();
+      } else {
+        title.textContent = "Add New Record";
+        form.reset();
+        document.getElementById("recordId").value = "";
+        document.getElementById("owner").value = getCurrentUserName();
+      }
+
+      toggleDateTime();
+      modal.classList.add("active");
+    }
+
+    function closeModal() {
+      document.getElementById("recordModal").classList.remove("active");
+    }
+
+    function toggleDateTime() {
+      const typeOfSession = document.getElementById("typeOfSession").value;
+      const dateTimeGroup = document.getElementById("dateTimeGroup");
+      const dateTimeInput = document.getElementById("dateTime");
+
+      if (typeOfSession === "Live+PDF") {
+        dateTimeGroup.style.display = "block";
+        dateTimeInput.required = true;
+      } else {
+        dateTimeGroup.style.display = "none";
+        dateTimeInput.required = false;
+        dateTimeInput.value = "";
+      }
+    }
+
+    function validateForm() {
+      let ok = true;
+      const requiredIds = ["product","productArea","sessionName","description","trainingLevel","typeOfSession","duration","adoptionReady","featureRelease","restrictedAccess","limitedAvailable","host","owner"];
+      for (const id of requiredIds) {
+        const el = document.getElementById(id);
+        if (!el.value.trim()) {
+          el.classList.add("error");
+          el.nextElementSibling && (el.nextElementSibling.style.display = "block");
+          ok = false;
+        }
+      }
+      const duration = parseInt(document.getElementById("duration").value, 10);
+      if (isNaN(duration) || duration < 3) {
+        const el = document.getElementById("duration");
+        el.classList.add("error");
+        el.nextElementSibling && (el.nextElementSibling.style.display = "block");
+        ok = false;
+      }
+      const type = document.getElementById("typeOfSession").value;
+      const dt = document.getElementById("dateTime").value;
+      if (type === "Live+PDF" && !dt) {
+        const el = document.getElementById("dateTime");
+        el.classList.add("error");
+        el.nextElementSibling && (el.nextElementSibling.style.display = "block");
+        ok = false;
+      }
+      return ok;
+    }
+
+    // =========================
+    // CRUD (append-only)
+    // =========================
+    async function loadData() {
+      if (!accessToken) {
+        alert("Please login first!");
+        return;
+      }
+      try {
+        setStatus("Loading from Excel...");
+        const rows = await loadEvents();
+        records = reduceEventsToRecords(rows);
+        renderTable();
+        setStatus(`Loaded ${records.length} active record(s).`);
+        showDebug(`Loaded rows: ${rows.length}\nActive records: ${records.length}`);
+      } catch (e) {
+        setStatus("❌ Load failed.");
+        showDebug("Load error:\n" + (e?.message || String(e)));
+        alert("Load failed:\n\n" + (e?.message || String(e)));
+      }
+    }
+
+    function findRecord(recordId) {
+      return records.find(r => r.recordId === recordId);
+    }
+
+    async function upsertRecord(recordId, data) {
+      const actor = getActor();
+      const row = [
+        guid(),                                 // EventId
+        recordId || guid(),                     // RecordId
+        "Upsert",                               // Action
+        new Date().toISOString(),               // EventTimeUtc
+        actor,                                  // Actor
+        data.product,
+        data.productArea,
+        data.sessionName,
+        data.description,
+        data.trainingLevel,
+        data.typeOfSession,
+        data.dateTime,
+        data.duration,
+        data.adoptionReady,
+        data.featureRelease,
+        data.restrictedAccess,
+        data.limitedAvailable,
+        data.host,
+        data.owner
+      ];
+
+      await appendEventRow(row);
+    }
+
+    async function softDelete(recordId) {
+      const actor = getActor();
+      const row = [
+        guid(),                     // EventId
+        recordId,                   // RecordId
+        "Delete",                   // Action
+        new Date().toISOString(),   // EventTimeUtc
+        actor,                      // Actor
+        "", "", "", "", "", "", "", "", "", "", "", "", "", "" // optional blanks
+      ];
+
+      await appendEventRow(row);
+    }
+
+    function editRecord(recordId) {
+      const rec = findRecord(recordId);
+      if (!rec) return;
+      openModal(rec);
+    }
+
+    async function duplicateRecord(recordId) {
+      const rec = findRecord(recordId);
+      if (!rec) return;
+
+      // New recordId; same content, but owner becomes current user
+      const newData = { ...rec, owner: getCurrentUserName() };
+      try {
+        setStatus("Duplicating...");
+        await upsertRecord(null, newData);
+        await loadData();
+        setStatus("Duplicated.");
+      } catch (e) {
+        setStatus("❌ Duplicate failed.");
+        alert("Duplicate failed:\n\n" + (e?.message || String(e)));
+      }
+    }
+
+    async function softDeleteRecord(recordId) {
+      const rec = findRecord(recordId);
+      if (!rec) return;
+
+      // Safety: only Owner can delete
+      if (rec.owner !== getCurrentUserName()) {
+        alert("Only the Owner can delete (soft delete) this record.");
+        return;
+      }
+
+      if (!confirm("Soft delete this record? (It will be hidden, but history remains.)")) return;
+
+      try {
+        setStatus("Deleting...");
+        await softDelete(recordId);
+        await loadData();
+        setStatus("Deleted (soft).");
+      } catch (e) {
+        setStatus("❌ Delete failed.");
+        alert("Delete failed:\n\n" + (e?.message || String(e)));
+      }
+    }
+
+    // Form submit => append Upsert
+    document.getElementById("recordForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      // clear validation display
+      document.querySelectorAll(".error-message").forEach(el => el.style.display = "none");
+      document.querySelectorAll(".error").forEach(el => el.classList.remove("error"));
+
+      if (!validateForm()) return;
+
+      const saveBtn = document.getElementById("saveBtn");
+      saveBtn.disabled = true;
+      saveBtn.textContent = "Saving...";
+
+      const recordId = document.getElementById("recordId").value || null;
+
+      const data = {
+        product: document.getElementById("product").value.trim(),
+        productArea: document.getElementById("productArea").value.trim(),
+        sessionName: document.getElementById("sessionName").value.trim(),
+        description: document.getElementById("description").value.trim(),
+        trainingLevel: document.getElementById("trainingLevel").value,
+        typeOfSession: document.getElementById("typeOfSession").value,
+        dateTime: (document.getElementById("typeOfSession").value === "Live+PDF")
+          ? document.getElementById("dateTime").value
+          : "",
+        duration: document.getElementById("duration").value.trim(),
+        adoptionReady: document.getElementById("adoptionReady").value.trim(),
+        featureRelease: document.getElementById("featureRelease").value.trim(),
+        restrictedAccess: document.getElementById("restrictedAccess").value,
+        limitedAvailable: document.getElementById("limitedAvailable").value,
+        host: document.getElementById("host").value.trim(),
+        owner: document.getElementById("owner").value.trim()
+      };
+
+      try {
+        setStatus("Saving to Excel (append-only)...");
+        await upsertRecord(recordId, data);
+        closeModal();
+        await loadData();
+        setStatus("Saved.");
+      } catch (err) {
+        setStatus("❌ Save failed.");
+        alert("Save failed:\n\n" + (err?.message || String(err)));
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Save";
+      }
+    });
+
+    // =========================
+    // MSAL BOOTSTRAP
+    // =========================
+    (async function msalBoot() {
+      try {
+        const redirectResult = await msalInstance.handleRedirectPromise();
+
+        if (redirectResult?.account) {
+          msalInstance.setActiveAccount(redirectResult.account);
+        } else {
+          const accounts = msalInstance.getAllAccounts();
+          if (accounts.length > 0) msalInstance.setActiveAccount(accounts[0]);
+        }
+
+        if (msalInstance.getActiveAccount()) {
+          showLoggedInUI();
+          setStatus("Signed in. Getting token...");
+          await getAccessToken();
+          setStatus("Signed in. Ready.");
+          await loadData();
+        } else {
+          setStatus("Not signed in.");
+          showDebug("Not signed in yet. Select 'Login with Microsoft'.");
+        }
+      } catch (e) {
+        setStatus("❌ MSAL error.");
+        showDebug("MSAL boot error:\n" + (e?.message || String(e)));
+      }
+    })();
+  </script>
+</body>
+</html>
