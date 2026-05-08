@@ -268,13 +268,18 @@
     // CONFIGURATION - Update these values
     // ============================================
     const CONFIG = {
-      clientId: 'aa12b8cf-940a-4415-badf-13e1fef050a9',
-      tenantId: '457d5685-0467-4d05-b23b-8f817adda47c',
-      // SharePoint site and Excel file path
-      sitePath: 'sites/ActiveLaunchPrograms',
-      excelFileName: '2026_Oct_RTP.xlsx'
-    };
-    const FILE_PATH = "SiteAssets/2026_Oct_RTP.xlsx";
+  clientId: 'aa12b8cf-940a-4415-badf-13e1fef050a9',
+  tenantId: '457d5685-0467-4d05-b23b-8f817adda47c',
+
+  // ✅ this must match the site in your new URL
+  sitePath: 'sites/LaunchManagementOperations',
+
+  // ✅ (optional) name of the document library in your URL
+  libraryName: 'Additional Resources'
+};
+
+// ✅ path *inside that library* (not including the library name itself)
+const FILE_PATH = "Release Training Plan/2026.10/2026_Oct_RTP.xlsx";
     // ============================================
     // MSAL Authentication Setup
     // ============================================
@@ -290,8 +295,12 @@
     const msalInstance = new msal.PublicClientApplication(msalConfig);
     let accessToken = null;
 
-  async function getSiteAssetsDriveId() {
-  // 1️⃣ Resolve site
+ let cachedDriveId = null;
+
+async function getDriveId() {
+  if (cachedDriveId) return cachedDriveId;
+
+  // 1) Resolve site by path
   const siteRes = await fetch(
     `https://graph.microsoft.com/v1.0/sites/inforonline.sharepoint.com:/${CONFIG.sitePath}`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -299,7 +308,7 @@
   if (!siteRes.ok) throw new Error("Cannot resolve site");
   const site = await siteRes.json();
 
-  // 2️⃣ Get ALL drives for the site
+  // 2) List drives (document libraries) on the site
   const drivesRes = await fetch(
     `https://graph.microsoft.com/v1.0/sites/${site.id}/drives`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -307,17 +316,18 @@
   if (!drivesRes.ok) throw new Error("Cannot list drives");
   const drives = await drivesRes.json();
 
-  // 3️⃣ Find Site Assets drive
-  const siteAssetsDrive = drives.value.find(
-    d => d.name === "Site Assets"
-  );
-  if (!siteAssetsDrive) {
-    throw new Error("Site Assets library not found");
+  // 3) Pick the library by name (from CONFIG.libraryName)
+  const target = drives.value.find(d => d.name === CONFIG.libraryName);
+
+  if (!target) {
+    // Helpful debug: show what libraries Graph sees
+    console.log("Available libraries:", drives.value.map(d => d.name));
+    throw new Error(`Library not found: ${CONFIG.libraryName}`);
   }
 
-  return siteAssetsDrive.id;
+  cachedDriveId = target.id;
+  return cachedDriveId;
 }
-   let cachedDriveId = null;
 
 async function getDriveId() {
   if (cachedDriveId) return cachedDriveId;
@@ -360,11 +370,11 @@ async function getDriveId() {
 const driveId = await getDriveId();
 
 // ✅ Correct path for Site Assets
+const driveId = await getDriveId();
+
 const response = await fetch(
-  `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/SiteAssets/2026_Oct_RTP.xlsx:/content`,
-  {
-    headers: { Authorization: `Bearer ${accessToken}` }
-  }
+  `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${encodeURI(FILE_PATH)}:/content`,
+  { headers: { Authorization: `Bearer ${accessToken}` } }
 );
 
         if (response.ok) {
@@ -439,19 +449,18 @@ const response = await fetch(
 
         // Upload to SharePoint
         const driveId = await getDriveId();
- 
-const uploadUrl =
-  `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${FILE_PATH}:/content`;
 
-        
-        const uploadResponse = await fetch(uploadUrl, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-          },
-          body: blob
-        });
+const uploadUrl =
+  `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${encodeURI(FILE_PATH)}:/content`;
+
+const uploadResponse = await fetch(uploadUrl, {
+  method: 'PUT',
+  headers: {
+    'Authorization': `Bearer ${accessToken}`,
+    'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  },
+  body: blob
+});
 
         
 if (uploadResponse.ok) {
