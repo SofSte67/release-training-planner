@@ -317,7 +317,14 @@
 
   return siteAssetsDrive.id;
 }
-    // Login function
+   let cachedDriveId = null;
+
+async function getDriveId() {
+  if (cachedDriveId) return cachedDriveId;
+  cachedDriveId = await getSiteAssetsDriveId(); // you already implemented this
+  return cachedDriveId;
+}
+   // Login function
     async function login() {
   try {
     showDebug("Starting Microsoft login (redirect)...");
