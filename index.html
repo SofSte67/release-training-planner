@@ -289,22 +289,33 @@
 
     const msalInstance = new msal.PublicClientApplication(msalConfig);
     let accessToken = null;
-async function getDriveId() {
+
+  async function getSiteAssetsDriveId() {
+  // 1️⃣ Resolve site
   const siteRes = await fetch(
     `https://graph.microsoft.com/v1.0/sites/inforonline.sharepoint.com:/${CONFIG.sitePath}`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
-  if (!siteRes.ok) throw new Error("Failed to resolve site");
+  if (!siteRes.ok) throw new Error("Cannot resolve site");
   const site = await siteRes.json();
 
-  const driveRes = await fetch(
-    `https://graph.microsoft.com/v1.0/sites/${site.id}/drive`,
+  // 2️⃣ Get ALL drives for the site
+  const drivesRes = await fetch(
+    `https://graph.microsoft.com/v1.0/sites/${site.id}/drives`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
-  if (!driveRes.ok) throw new Error("Failed to resolve drive");
-  const drive = await driveRes.json();
+  if (!drivesRes.ok) throw new Error("Cannot list drives");
+  const drives = await drivesRes.json();
 
-  return drive.id;
+  // 3️⃣ Find Site Assets drive
+  const siteAssetsDrive = drives.value.find(
+    d => d.name === "Site Assets"
+  );
+  if (!siteAssetsDrive) {
+    throw new Error("Site Assets library not found");
+  }
+
+  return siteAssetsDrive.id;
 }
     // Login function
     async function login() {
