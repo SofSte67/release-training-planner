@@ -885,11 +885,11 @@
         }
 
         if (msalInstance.getActiveAccount()) {
-          showLoggedInUI();
-          setStatus("Signed in. Getting token...");
-          await getAccessToken();
-          setStatus("Signed in. Ready.");
-          await loadData();
+  showLoggedInUI();
+  setStatus("Signed in. Getting token...");
+  await getAccessToken();
+  setStatus("Signed in. Ready (click Refresh to load data).");
+}
         } else {
           setStatus("Not signed in.");
           showDebug("Not signed in yet. Select 'Login with Microsoft'.");
