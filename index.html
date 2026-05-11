@@ -386,7 +386,10 @@
   const acct = msalInstance.getActiveAccount();
   return acct?.username || acct?.name || "Anonymous";
 }
-
+function getCurrentUserName() {
+  const acct = msalInstance.getActiveAccount();
+  return acct?.username || acct?.name || "";
+}
     async function login() {
       try {
         showDebug("Starting Microsoft login (redirect)...");
