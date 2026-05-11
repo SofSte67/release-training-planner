@@ -613,14 +613,10 @@ function getCurrentUserName() {
               <button class="btn btn-sm btn-secondary" onclick="editRecord('${rec.recordId}')">Edit</button>
               <button class="btn btn-sm btn-secondary" onclick="duplicateRecord('${rec.recordId}')">Duplicate</button>
               ${
-                function getCurrentUserName() {
-                    const acct = msalInstance.getActiveAccount();
-                    return acct?.name || acct?.username || "";
-                  }
-                rec.owner === getCurrentUserName()
-                  ? `<button class="btn btn-sm btn-danger" onclick="softDeleteRecord('${rec.recordId}')">Delete</button>`
-                  : `<button class="btn btn-sm btn-danger" disabled title="Only the Owner can delete">Delete</button>`
-              }
+  rec.owner === getCurrentUserName()
+    ? `<button class="btn btn-sm btn-danger" onclick="softDeleteRecord('${rec.recordId}')">Delete</button>`
+    : `<button class="btn btn-sm btn-danger" disabled title="Only the Owner can delete">Delete</button>`
+}
             </div>
           </td>
         </tr>
