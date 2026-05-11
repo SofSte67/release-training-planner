@@ -390,7 +390,7 @@
       try {
         showDebug("Starting Microsoft login (redirect)...");
         await msalInstance.loginRedirect({
-          scopes: ["Files.ReadWrite", "Sites.ReadWrite.All"],
+          scopes: ["Files.ReadWrite.All", "Sites.ReadWrite.All"],
           prompt: "select_account"
         });
       } catch (e) {
@@ -415,7 +415,7 @@
 
     async function getAccessToken() {
       const request = {
-        scopes: ["Files.ReadWrite", "Sites.ReadWrite.All"],
+        scopes: ["Files.ReadWrite.All", "Sites.ReadWrite.All"],
         account: msalInstance.getActiveAccount()
       };
 
