@@ -772,7 +772,10 @@ function getCurrentUserName() {
       await appendEventRow(row);
     }
 
-    async function softDelete(recordId) {
+    async function softDelete(recordId) if (!accessToken) {
+  await getAccessToken();
+}
+``{
       const actor = getActor();
       const row = [
         guid(),                     // EventId
