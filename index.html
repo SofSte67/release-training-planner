@@ -714,7 +714,11 @@ function getCurrentUserName() {
     // =========================
     // CRUD (append-only)
     // =========================
-    async function loadData() {
+    async function loadData() 
+    if (!accessToken) {
+  await getAccessToken();
+}
+``{
       if (!accessToken) {
         alert("Please login first!");
         return;
@@ -737,7 +741,11 @@ function getCurrentUserName() {
       return records.find(r => r.recordId === recordId);
     }
 
-    async function upsertRecord(recordId, data) {
+    async function upsertRecord(recordId, data) 
+    if (!accessToken) {
+  await getAccessToken();
+}
+``{
       const actor = getActor();
       const row = [
         guid(),                                 // EventId
