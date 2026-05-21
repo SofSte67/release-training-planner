@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -22,12 +21,6 @@
       box-shadow: 0 2px 6px rgba(0,0,0,0.08);
     }
     .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-    .grow { flex:1; min-width:260px; }
-    label { font-weight: 600; margin-right: 8px; }
-    input[type="text"] {
-      padding: 9px 12px; border: 1px solid #ddd; border-radius: 8px;
-      font-size: 14px; width: 260px;
-    }
     .status {
       font-size: 13px; color:#555;
       background:#f6f7f9; border:1px solid #e7e9ef;
@@ -84,10 +77,8 @@
     .error { border-color: #dc3545 !important; }
     .error-message { color:#dc3545; font-size:12px; display:none; margin-top: 6px; }
     .modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top: 16px; flex-wrap:wrap; }
-    .mono {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      font-size: 12px;
-    }
+
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; }
     #debugBox {
       margin-top: 10px; padding: 10px; background: #fff3cd; border: 1px solid #ffeeba;
       border-radius: 10px; display:none; white-space: pre-wrap;
@@ -103,10 +94,9 @@
   <main>
     <div class="user-bar">
       <div class="row">
-                <div id="loginStatus" class="row">
+        <div id="loginStatus" class="row">
           <button class="btn btn-primary" onclick="login()">🔐 Login with Microsoft</button>
         </div>
-
         <div class="status" id="appStatus">Not signed in.</div>
       </div>
       <div id="debugBox" class="mono"></div>
@@ -249,7 +239,7 @@
           </div>
 
           <div class="form-group">
-            <label for="host">Host (ex: Sofia Stenbakken) *</label>
+            <label for="host">Host *</label>
             <input type="text" id="host" required />
             <div class="error-message">Required</div>
           </div>
@@ -258,7 +248,7 @@
             <label for="owner">Owner *</label>
             <input type="text" id="owner" required />
             <div class="error-message">Required</div>
-            <div class="hint">For safety, only the Owner can soft-delete a record.</div>
+            <div class="hint">Owner is auto-filled and locked. Only Owner can edit/delete.</div>
           </div>
         </div>
 
@@ -272,37 +262,34 @@
 
   <script>
     /************************************************************
-     * WHY THIS DESIGN IS SAFE
-     * - We NEVER upload/replace the workbook (no PUT .../content),
-     *   because that overwrites the entire file. (Graph doc: upload/replace)
-     * - Instead we append rows to an Excel TABLE using:
-     *   POST .../workbook/tables/{table}/rows/add with index:null (append).
+     * MULTI-USER SAFE DESIGN (event log)
+     * - We only append rows to an Excel TABLE (RTPEvents).
+     * - We NEVER upload/replace the workbook.
+     *
+     * IMPORTANT FIX FOR WAC TOKEN 403:
+     * - We DO NOT call /root:/path:/workbook/... endpoints.
+     * - We first resolve the driveItem ID, then call:
+     *   /drives/{driveId}/items/{itemId}/workbook/...
      ************************************************************/
 
     // =========================
-    // CONFIG (EDIT THESE 3)
+    // CONFIG (EDIT THESE)
     // =========================
     const CONFIG = {
       clientId: "aa12b8cf-940a-4415-badf-13e1fef050a9",
       tenantId: "457d5685-0467-4d05-b23b-8f817adda47c",
-
-      // This must match your SharePoint site path segment
-      // Example: "sites/LaunchManagementOperations"
+      sharepointHost: "inforonline.sharepoint.com",
       sitePath: "sites/LaunchManagementOperations",
-
-      // Document library that contains the Excel file
-      libraryName: "Documents"
+      libraryName: "Documents" // <-- keep Documents if possible
     };
 
     // Path INSIDE the library (do NOT include the library name)
-    // Example: "Release Training Plan/2026.10/2026_Oct_RTP.xlsx"
-    const FILE_PATH = "2026_Oct_RTP.xlsx";
+    const FILE_PATH = "2026_Oct_RTP.xlsx"; // or "Release Training Plan/2026.10/2026_Oct_RTP.xlsx"
 
     // Excel TABLE name inside the workbook for the event log
-    // Must match the table you create in Excel (Insert -> Table -> Table Name)
     const TABLE_NAME = "RTPEvents";
 
-    // Column indexes in RTPEvents table (must match the order you create in Excel)
+    // Column order in RTPEvents table (index-based; header text can contain spaces)
     const COL = {
       EventId: 0,
       RecordId: 1,
@@ -328,11 +315,12 @@
     // =========================
     // MSAL SETUP
     // =========================
+    const SCOPES = ["User.Read", "Files.ReadWrite.All", "Sites.ReadWrite.All"];
+
     const msalConfig = {
       auth: {
         clientId: CONFIG.clientId,
         authority: `https://login.microsoftonline.com/${CONFIG.tenantId}`,
-        // Your GitHub Pages URL:
         redirectUri: window.location.origin + window.location.pathname
       },
       cache: { cacheLocation: "sessionStorage" }
@@ -341,17 +329,20 @@
     const msalInstance = new msal.PublicClientApplication(msalConfig);
 
     let accessToken = null;
+    let cachedSiteId = null;
     let cachedDriveId = null;
-    let debugEnabled = false;
+    let cachedItemId = null;
+    let workbookSessionId = null;
 
-    // UI state derived from event log:
-    // records: [{recordId, product, ..., owner, deleted:false}]
+    let debugEnabled = false;
     let records = [];
 
+    // =========================
+    // UI helpers
+    // =========================
     function toggleDebug() {
       debugEnabled = !debugEnabled;
-      const box = document.getElementById("debugBox");
-      box.style.display = debugEnabled ? "block" : "none";
+      document.getElementById("debugBox").style.display = debugEnabled ? "block" : "none";
       if (debugEnabled) showDebug("Debug enabled.");
     }
 
@@ -374,33 +365,28 @@
 
     function guid() {
       if (crypto && crypto.randomUUID) return crypto.randomUUID();
-      // Fallback:
       return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
         const r = Math.random() * 16 | 0;
         const v = c === "x" ? r : (r & 0x3 | 0x8);
         return v.toString(16);
       });
     }
-    
+
+    function getAccount() { return msalInstance.getActiveAccount(); }
     function getActor() {
-  const acct = msalInstance.getActiveAccount();
-  return acct?.username || acct?.name || "Anonymous";
-}
-function getCurrentUserName() {
-  const acct = msalInstance.getActiveAccount();
-  return acct?.username || acct?.name || "";
-}
+      const acct = getAccount();
+      return acct?.username || acct?.name || "Anonymous";
+    }
+    function getCurrentUserName() {
+      const acct = getAccount();
+      return acct?.username || acct?.name || "";
+    }
+
+    // =========================
+    // Auth
+    // =========================
     async function login() {
-      try {
-        showDebug("Starting Microsoft login (redirect)...");
-        await msalInstance.loginRedirect({
-          scopes: ["Files.ReadWrite.All", "Sites.ReadWrite.All"],
-          prompt: "select_account"
-        });
-      } catch (e) {
-        showDebug("Login failed: " + (e?.message || String(e)));
-        alert("Login failed: " + (e?.message || String(e)));
-      }
+      await msalInstance.loginRedirect({ scopes: SCOPES, prompt: "select_account" });
     }
 
     function logout() {
@@ -408,7 +394,7 @@ function getCurrentUserName() {
     }
 
     function showLoggedInUI() {
-      const acct = msalInstance.getActiveAccount();
+      const acct = getAccount();
       const name = acct?.name || acct?.username || "Signed in";
       document.getElementById("loginStatus").innerHTML = `
         <div class="row">
@@ -417,53 +403,55 @@ function getCurrentUserName() {
         </div>`;
     }
 
-    async function getAccessToken() {
-      const request = {
-        scopes: ["Files.ReadWrite.All", "Sites.ReadWrite.All"],
-        account: msalInstance.getActiveAccount()
-      };
-
+    async function ensureToken() {
+      const request = { scopes: SCOPES, account: getAccount() };
       try {
         const result = await msalInstance.acquireTokenSilent(request);
         accessToken = result.accessToken;
-        showDebug("Token acquired silently.");
         return accessToken;
       } catch (err) {
-        showDebug("Silent token failed, redirecting: " + (err?.message || String(err)));
         await msalInstance.acquireTokenRedirect(request);
       }
     }
 
+    // One fetch wrapper (always adds Authorization + workbook session header if present)
+    async function graphFetch(url, options = {}) {
+      await ensureToken();
+
+      const headers = new Headers(options.headers || {});
+      headers.set("Authorization", `Bearer ${accessToken}`);
+      if (workbookSessionId) headers.set("workbook-session-id", workbookSessionId);
+
+      const res = await fetch(url, { ...options, headers });
+      return res;
+    }
+
     // =========================
-    // DRIVE RESOLUTION (SharePoint library)
+    // Resolve site + drive + itemId
     // =========================
+    async function getSiteId() {
+      if (cachedSiteId) return cachedSiteId;
+
+      const url = `https://graph.microsoft.com/v1.0/sites/${CONFIG.sharepointHost}:/${CONFIG.sitePath}`;
+      const res = await graphFetch(url);
+      const text = await res.text();
+      if (!res.ok) throw new Error(`Cannot resolve site (${res.status}): ${text}`);
+
+      const site = JSON.parse(text);
+      cachedSiteId = site.id;
+      return cachedSiteId;
+    }
+
     async function getDriveId() {
       if (cachedDriveId) return cachedDriveId;
-      if (!accessToken) throw new Error("No access token");
 
-      // 1) Resolve site by path
-      const siteRes = await fetch(
-        `https://graph.microsoft.com/v1.0/sites/inforonline.sharepoint.com:/${CONFIG.sitePath}`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
-      if (!siteRes.ok) {
-        const t = await siteRes.text();
-        throw new Error("Cannot resolve site. " + t);
-      }
-      const site = await siteRes.json();
+      const siteId = await getSiteId();
+      const url = `https://graph.microsoft.com/v1.0/sites/${siteId}/drives`;
+      const res = await graphFetch(url);
+      const text = await res.text();
+      if (!res.ok) throw new Error(`Cannot list drives (${res.status}): ${text}`);
 
-      // 2) List drives (document libraries)
-      const drivesRes = await fetch(
-        `https://graph.microsoft.com/v1.0/sites/${site.id}/drives`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
-      if (!drivesRes.ok) {
-        const t = await drivesRes.text();
-        throw new Error("Cannot list drives. " + t);
-      }
-      const drives = await drivesRes.json();
-
-      // 3) Find target library
+      const drives = JSON.parse(text);
       const target = drives.value.find(d => d.name === CONFIG.libraryName);
       if (!target) {
         const names = drives.value.map(d => d.name).join(", ");
@@ -474,22 +462,55 @@ function getCurrentUserName() {
       return cachedDriveId;
     }
 
+    async function getFileItemId() {
+      if (cachedItemId) return cachedItemId;
+
+      const driveId = await getDriveId();
+      const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${encodeURI(FILE_PATH)}`;
+      const res = await graphFetch(url);
+      const text = await res.text();
+      if (!res.ok) throw new Error(`Get file id failed (${res.status}): ${text}`);
+
+      const item = JSON.parse(text);
+      cachedItemId = item.id;
+      return cachedItemId;
+    }
+
+    // Create a workbook session (helps stability under multi-user scenarios)
+    async function ensureWorkbookSession() {
+      if (workbookSessionId) return workbookSessionId;
+
+      const driveId = await getDriveId();
+      const itemId = await getFileItemId();
+
+      const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/createSession`;
+      const res = await graphFetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ persistChanges: true })
+      });
+
+      const text = await res.text();
+      if (!res.ok) throw new Error(`CreateSession failed (${res.status}): ${text}`);
+
+      const json = JSON.parse(text);
+      workbookSessionId = json.id;
+      return workbookSessionId;
+    }
+
     // =========================
-    // EXCEL TABLE API (append-only)
+    // Excel table operations (ID-based)
     // =========================
     async function graphGetAll(url) {
-      // Handles pagination with @odata.nextLink if present
       let all = [];
       let next = url;
+
       while (next) {
-        const res = await fetch(next, {
-          headers: { Authorization: `Bearer ${accessToken}` }
-        });
-        if (!res.ok) {
-          const t = await res.text();
-          throw new Error(`GET failed (${res.status}): ${t}`);
-        }
-        const json = await res.json();
+        const res = await graphFetch(next);
+        const text = await res.text();
+        if (!res.ok) throw new Error(`GET failed (${res.status}): ${text}`);
+
+        const json = JSON.parse(text);
         if (Array.isArray(json.value)) all = all.concat(json.value);
         next = json["@odata.nextLink"] || null;
       }
@@ -497,67 +518,36 @@ function getCurrentUserName() {
     }
 
     async function appendEventRow(valuesRow) {
-  const driveId = await getDriveId();
+      await ensureWorkbookSession();
 
-  const url =
-    `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${encodeURI(FILE_PATH)}:/workbook/worksheets('Sheet1')/tables('${TABLE_NAME}')/rows/add`;
+      const driveId = await getDriveId();
+      const itemId = await getFileItemId();
 
-  const body = {
-    index: null,
-    values: [[
-      "test1",
-      "test2",
-      "Upsert",
-      new Date().toISOString(),
-      "tester",
-      "prod",
-      "area",
-      "session",
-      "desc",
-      "level",
-      "type",
-      "",
-      "10",
-      "2026.01",
-      "2026.02",
-      "All",
-      "No",
-      "Host",
-      "Owner"
-    ]]
-  };
+      const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/tables/${TABLE_NAME}/rows/add`;
+      const body = { index: null, values: [ valuesRow ] };
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(body)
-  });
+      const res = await graphFetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
 
-  const text = await res.text();
-  console.log("RESPONSE:", res.status, text);
-
-  if (!res.ok) {
-    throw new Error(`Append failed (${res.status}): ${text}`);
-  }
-
-  return JSON.parse(text);
-}
+      const text = await res.text();
+      if (!res.ok) throw new Error(`Append failed (${res.status}): ${text}`);
+      return JSON.parse(text);
+    }
 
     async function loadEvents() {
-      const driveId = await getDriveId();
-      const url =
-        `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${encodeURI(FILE_PATH)}:/workbook/tables/${TABLE_NAME}/rows`;
+      await ensureWorkbookSession();
 
-      // Returns workbookTableRow collection; each row has .values
-      const rows = await graphGetAll(url);
-      return rows;
+      const driveId = await getDriveId();
+      const itemId = await getFileItemId();
+
+      const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/tables/${TABLE_NAME}/rows`;
+      return await graphGetAll(url);
     }
 
     function reduceEventsToRecords(rows) {
-      // Process in order; last event wins for each RecordId
       const map = new Map();
 
       for (const r of rows) {
@@ -574,7 +564,6 @@ function getCurrentUserName() {
           continue;
         }
 
-        // Upsert
         map.set(recordId, {
           recordId,
           deleted: false,
@@ -598,13 +587,11 @@ function getCurrentUserName() {
         });
       }
 
-      // Keep only not-deleted
-      const list = Array.from(map.values()).filter(x => !x.deleted);
-      return list;
+      return Array.from(map.values()).filter(x => !x.deleted);
     }
 
     // =========================
-    // UI RENDERING
+    // UI rendering + permissions
     // =========================
     function renderTable() {
       const tbody = document.getElementById("tableBody");
@@ -617,6 +604,7 @@ function getCurrentUserName() {
       }
 
       empty.style.display = "none";
+
       tbody.innerHTML = records.map(rec => `
         <tr>
           <td>${escapeHtml(rec.product)}</td>
@@ -635,13 +623,17 @@ function getCurrentUserName() {
           <td>${escapeHtml(rec.owner)}</td>
           <td>
             <div class="actions">
-              <button class="btn btn-sm btn-secondary" onclick="editRecord('${rec.recordId}')">Edit</button>
+              ${
+                rec.owner === getCurrentUserName()
+                  ? `<button class="btn btn-sm btn-secondary" onclick="editRecord('${rec.recordId}')">Edit</button>`
+                  : `<button class="btn btn-sm btn-secondary" disabled title="Only the Owner can edit">Edit</button>`
+              }
               <button class="btn btn-sm btn-secondary" onclick="duplicateRecord('${rec.recordId}')">Duplicate</button>
               ${
-  rec.owner === getCurrentUserName()
-    ? `<button class="btn btn-sm btn-danger" onclick="softDeleteRecord('${rec.recordId}')">Delete</button>`
-    : `<button class="btn btn-sm btn-danger" disabled title="Only the Owner can delete">Delete</button>`
-}
+                rec.owner === getCurrentUserName()
+                  ? `<button class="btn btn-sm btn-danger" onclick="softDeleteRecord('${rec.recordId}')">Delete</button>`
+                  : `<button class="btn btn-sm btn-danger" disabled title="Only the Owner can delete">Delete</button>`
+              }
             </div>
           </td>
         </tr>
@@ -649,14 +641,13 @@ function getCurrentUserName() {
     }
 
     // =========================
-    // MODAL
+    // Modal
     // =========================
     function openModal(record = null) {
       const modal = document.getElementById("recordModal");
       const form = document.getElementById("recordForm");
       const title = document.getElementById("modalTitle");
 
-      // clear validation UI
       document.querySelectorAll(".error-message").forEach(el => el.style.display = "none");
       document.querySelectorAll(".error").forEach(el => el.classList.remove("error"));
 
@@ -676,13 +667,16 @@ function getCurrentUserName() {
         document.getElementById("restrictedAccess").value = record.restrictedAccess || "";
         document.getElementById("limitedAvailable").value = record.limitedAvailable || "";
         document.getElementById("host").value = record.host || "";
-        document.getElementById("owner").value = record.owner || getCurrentUserName();
       } else {
         title.textContent = "Add New Record";
         form.reset();
         document.getElementById("recordId").value = "";
-        document.getElementById("owner").value = getCurrentUserName();
       }
+
+      // Owner is always current user and locked
+      const ownerEl = document.getElementById("owner");
+      ownerEl.value = getCurrentUserName();
+      ownerEl.readOnly = true;
 
       toggleDateTime();
       modal.classList.add("active");
@@ -712,12 +706,13 @@ function getCurrentUserName() {
       const requiredIds = ["product","productArea","sessionName","description","trainingLevel","typeOfSession","duration","adoptionReady","featureRelease","restrictedAccess","limitedAvailable","host","owner"];
       for (const id of requiredIds) {
         const el = document.getElementById(id);
-        if (!el.value.trim()) {
+        if (!String(el.value || "").trim()) {
           el.classList.add("error");
           el.nextElementSibling && (el.nextElementSibling.style.display = "block");
           ok = false;
         }
       }
+
       const duration = parseInt(document.getElementById("duration").value, 10);
       if (isNaN(duration) || duration < 3) {
         const el = document.getElementById("duration");
@@ -725,6 +720,7 @@ function getCurrentUserName() {
         el.nextElementSibling && (el.nextElementSibling.style.display = "block");
         ok = false;
       }
+
       const type = document.getElementById("typeOfSession").value;
       const dt = document.getElementById("dateTime").value;
       if (type === "Live+PDF" && !dt) {
@@ -733,92 +729,78 @@ function getCurrentUserName() {
         el.nextElementSibling && (el.nextElementSibling.style.display = "block");
         ok = false;
       }
+
       return ok;
     }
 
     // =========================
-    // CRUD (append-only)
+    // CRUD via event log
     // =========================
     async function loadData() {
-  if (!accessToken) {
-    await getAccessToken();
-  }
-
-  if (!accessToken) {
-    alert("Please login first!");
-    return;
-  }
-
-  try {
-    setStatus("Loading from Excel...");
-    const rows = await loadEvents();
-    records = reduceEventsToRecords(rows);
-    renderTable();
-    setStatus(`Loaded ${records.length} active record(s).`);
-    showDebug(`Loaded rows: ${rows.length}\nActive records: ${records.length}`);
-  } catch (e) {
-    setStatus("❌ Load failed.");
-    showDebug("Load error:\n" + (e?.message || String(e)));
-    alert("Load failed:\n\n" + (e?.message || String(e)));
-  }
-}
-
+      try {
+        setStatus("Loading from Excel...");
+        const rows = await loadEvents();
+        records = reduceEventsToRecords(rows);
+        renderTable();
+        setStatus(`Loaded ${records.length} active record(s).`);
+        showDebug(`Rows: ${rows.length}\nActive: ${records.length}\nDrive: ${cachedDriveId}\nItem: ${cachedItemId}`);
+      } catch (e) {
+        setStatus("❌ Load failed.");
+        showDebug(e?.message || String(e));
+        alert("Load failed:\n\n" + (e?.message || String(e)));
+      }
+    }
 
     function findRecord(recordId) {
       return records.find(r => r.recordId === recordId);
     }
 
     async function upsertRecord(recordId, data) {
-  if (!accessToken) {
-    await getAccessToken();
-  }
+      const actor = getActor();
+      const row = [
+        guid(),
+        recordId || guid(),
+        "Upsert",
+        new Date().toISOString(),
+        actor,
+        data.product,
+        data.productArea,
+        data.sessionName,
+        data.description,
+        data.trainingLevel,
+        data.typeOfSession,
+        data.dateTime,
+        data.duration,
+        data.adoptionReady,
+        data.featureRelease,
+        data.restrictedAccess,
+        data.limitedAvailable,
+        data.host,
+        data.owner
+      ];
+      await appendEventRow(row);
+    }
 
-  const actor = getActor();
-  const row = [
-    guid(),
-    recordId || guid(),
-    "Upsert",
-    new Date().toISOString(),
-    actor,
-    data.product,
-    data.productArea,
-    data.sessionName,
-    data.description,
-    data.trainingLevel,
-    data.typeOfSession,
-    data.dateTime,
-    data.duration,
-    data.adoptionReady,
-    data.featureRelease,
-    data.restrictedAccess,
-    data.limitedAvailable,
-    data.host,
-    data.owner
-  ];
-
-  await appendEventRow(row);
-}
     async function softDelete(recordId) {
-  if (!accessToken) {
-    await getAccessToken();
-  }
-
-  const actor = getActor();
-  const row = [
-    guid(),
-    recordId,
-    "Delete",
-    new Date().toISOString(),
-    actor,
-    "", "", "", "", "", "", "", "", "", "", "", "", "", ""
-  ];
-
-  await appendEventRow(row);
-}
+      const actor = getActor();
+      const row = [
+        guid(),
+        recordId,
+        "Delete",
+        new Date().toISOString(),
+        actor,
+        "", "", "", "", "", "", "", "", "", "", "", "", "", ""
+      ];
+      await appendEventRow(row);
+    }
 
     function editRecord(recordId) {
       const rec = findRecord(recordId);
       if (!rec) return;
+      if (rec.owner !== getCurrentUserName()) {
+        alert("Only the Owner can edit this record.");
+        return;
+      }
       openModal(rec);
     }
 
@@ -826,7 +808,6 @@ function getCurrentUserName() {
       const rec = findRecord(recordId);
       if (!rec) return;
 
-      // New recordId; same content, but owner becomes current user
       const newData = { ...rec, owner: getCurrentUserName() };
       try {
         setStatus("Duplicating...");
@@ -843,12 +824,10 @@ function getCurrentUserName() {
       const rec = findRecord(recordId);
       if (!rec) return;
 
-      // Safety: only Owner can delete
       if (rec.owner !== getCurrentUserName()) {
-        alert("Only the Owner can delete (soft delete) this record.");
+        alert("Only the Owner can delete this record.");
         return;
       }
-
       if (!confirm("Soft delete this record? (It will be hidden, but history remains.)")) return;
 
       try {
@@ -862,11 +841,10 @@ function getCurrentUserName() {
       }
     }
 
-    // Form submit => append Upsert
+    // Form submit
     document.getElementById("recordForm").addEventListener("submit", async (e) => {
       e.preventDefault();
 
-      // clear validation display
       document.querySelectorAll(".error-message").forEach(el => el.style.display = "none");
       document.querySelectorAll(".error").forEach(el => el.classList.remove("error"));
 
@@ -894,7 +872,7 @@ function getCurrentUserName() {
         restrictedAccess: document.getElementById("restrictedAccess").value,
         limitedAvailable: document.getElementById("limitedAvailable").value,
         host: document.getElementById("host").value.trim(),
-        owner: document.getElementById("owner").value.trim()
+        owner: getCurrentUserName()
       };
 
       try {
@@ -913,7 +891,7 @@ function getCurrentUserName() {
     });
 
     // =========================
-    // MSAL BOOTSTRAP
+    // Boot
     // =========================
     (async function msalBoot() {
       try {
@@ -926,18 +904,17 @@ function getCurrentUserName() {
           if (accounts.length > 0) msalInstance.setActiveAccount(accounts[0]);
         }
 
-        if (msalInstance.getActiveAccount()) {
-  showLoggedInUI();
-  setStatus("Signed in. Getting token...");
-  await getAccessToken();
-  setStatus("Signed in. Ready (click Refresh to load data).");
+        if (getAccount()) {
+          showLoggedInUI();
+          setStatus("Signed in. Ready (Refresh to load).");
+          showDebug("Signed in.");
         } else {
           setStatus("Not signed in.");
-          showDebug("Not signed in yet. Select 'Login with Microsoft'.");
+          showDebug("Not signed in yet.");
         }
       } catch (e) {
         setStatus("❌ MSAL error.");
-        showDebug("MSAL boot error:\n" + (e?.message || String(e)));
+        showDebug(e?.message || String(e));
       }
     })();
   </script>
