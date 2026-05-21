@@ -714,80 +714,82 @@ function getCurrentUserName() {
     // =========================
     // CRUD (append-only)
     // =========================
-    async function loadData() 
-    if (!accessToken) {
-  await getAccessToken();
+    async function loadData() {
+  if (!accessToken) {
+    await getAccessToken();
+  }
+
+  if (!accessToken) {
+    alert("Please login first!");
+    return;
+  }
+
+  try {
+    setStatus("Loading from Excel...");
+    const rows = await loadEvents();
+    records = reduceEventsToRecords(rows);
+    renderTable();
+    setStatus(`Loaded ${records.length} active record(s).`);
+    showDebug(`Loaded rows: ${rows.length}\nActive records: ${records.length}`);
+  } catch (e) {
+    setStatus("❌ Load failed.");
+    showDebug("Load error:\n" + (e?.message || String(e)));
+    alert("Load failed:\n\n" + (e?.message || String(e)));
+  }
 }
-``{
-      if (!accessToken) {
-        alert("Please login first!");
-        return;
-      }
-      try {
-        setStatus("Loading from Excel...");
-        const rows = await loadEvents();
-        records = reduceEventsToRecords(rows);
-        renderTable();
-        setStatus(`Loaded ${records.length} active record(s).`);
-        showDebug(`Loaded rows: ${rows.length}\nActive records: ${records.length}`);
-      } catch (e) {
-        setStatus("❌ Load failed.");
-        showDebug("Load error:\n" + (e?.message || String(e)));
-        alert("Load failed:\n\n" + (e?.message || String(e)));
-      }
-    }
+
 
     function findRecord(recordId) {
       return records.find(r => r.recordId === recordId);
     }
 
-    async function upsertRecord(recordId, data) 
-    if (!accessToken) {
-  await getAccessToken();
+    async function upsertRecord(recordId, data) {
+  if (!accessToken) {
+    await getAccessToken();
+  }
+
+  const actor = getActor();
+  const row = [
+    guid(),
+    recordId || guid(),
+    "Upsert",
+    new Date().toISOString(),
+    actor,
+    data.product,
+    data.productArea,
+    data.sessionName,
+    data.description,
+    data.trainingLevel,
+    data.typeOfSession,
+    data.dateTime,
+    data.duration,
+    data.adoptionReady,
+    data.featureRelease,
+    data.restrictedAccess,
+    data.limitedAvailable,
+    data.host,
+    data.owner
+  ];
+
+  await appendEventRow(row);
 }
-``{
-      const actor = getActor();
-      const row = [
-        guid(),                                 // EventId
-        recordId || guid(),                     // RecordId
-        "Upsert",                               // Action
-        new Date().toISOString(),               // EventTimeUtc
-        actor,                                  // Actor
-        data.product,
-        data.productArea,
-        data.sessionName,
-        data.description,
-        data.trainingLevel,
-        data.typeOfSession,
-        data.dateTime,
-        data.duration,
-        data.adoptionReady,
-        data.featureRelease,
-        data.restrictedAccess,
-        data.limitedAvailable,
-        data.host,
-        data.owner
-      ];
+    async function softDelete(recordId) {
+  if (!accessToken) {
+    await getAccessToken();
+  }
 
-      await appendEventRow(row);
-    }
+  const actor = getActor();
+  const row = [
+    guid(),
+    recordId,
+    "Delete",
+    new Date().toISOString(),
+    actor,
+    "", "", "", "", "", "", "", "", "", "", "", "", "", ""
+  ];
 
-    async function softDelete(recordId) if (!accessToken) {
-  await getAccessToken();
+  await appendEventRow(row);
 }
-``{
-      const actor = getActor();
-      const row = [
-        guid(),                     // EventId
-        recordId,                   // RecordId
-        "Delete",                   // Action
-        new Date().toISOString(),   // EventTimeUtc
-        actor,                      // Actor
-        "", "", "", "", "", "", "", "", "", "", "", "", "", "" // optional blanks
-      ];
-
-      await appendEventRow(row);
-    }
 
     function editRecord(recordId) {
       const rec = findRecord(recordId);
