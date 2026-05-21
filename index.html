@@ -497,29 +497,54 @@ function getCurrentUserName() {
     }
 
     async function appendEventRow(valuesRow) {
-      const driveId = await getDriveId();
+  const driveId = await getDriveId();
 
-      const url =
-        `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${encodeURI(FILE_PATH)}:/workbook/tables/${TABLE_NAME}/rows/add`;
+  const url =
+    `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${encodeURI(FILE_PATH)}:/workbook/worksheets('Sheet1')/tables('${TABLE_NAME}')/rows/add`;
 
-      // index: null => append to end (Graph Excel docs)
-      const body = { index: null, values: [ valuesRow ] };
+  const body = {
+    index: null,
+    values: [[
+      "test1",
+      "test2",
+      "Upsert",
+      new Date().toISOString(),
+      "tester",
+      "prod",
+      "area",
+      "session",
+      "desc",
+      "level",
+      "type",
+      "",
+      "10",
+      "2026.01",
+      "2026.02",
+      "All",
+      "No",
+      "Host",
+      "Owner"
+    ]]
+  };
 
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(body)
-      });
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
 
-      if (!res.ok) {
-        const t = await res.text();
-        throw new Error(`Append failed (${res.status}): ${t}`);
-      }
-      return await res.json();
-    }
+  const text = await res.text();
+  console.log("RESPONSE:", res.status, text);
+
+  if (!res.ok) {
+    throw new Error(`Append failed (${res.status}): ${text}`);
+  }
+
+  return JSON.parse(text);
+}
 
     async function loadEvents() {
       const driveId = await getDriveId();
