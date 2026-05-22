@@ -1,4 +1,4 @@
-
+ 
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,7 +7,7 @@
   <title>Release Training Planner (Excel Event Log)</title>
 
   <!-- MSAL for Microsoft authentication -->
-  <script src="https://alcdn.msauth.net/browser/2.38.1/js/msal-browser.min.js"></script>
+  <script src="https://alcdn.msauth.net/browser/2.38.1/js/msal-browser.min.js">
 
   <style>
     * { box-sizing: border-box; }
@@ -105,7 +105,7 @@
 
     <div class="toolbar">
       <button class="btn btn-primary" onclick="openModal()">+ Add New Record</button>
-      <button class="btn btn-secondary" onclick="loadData()">🔄 Refresh</button>
+      <button class="btn btn-secondary" onclick="mySubmissionsActive = false; loadData()">🔄 Refresh</button>
       <button class="btn btn-secondary" onclick="toggleDebug()">🧪 Debug</button>
       <button class="btn btn-secondary" onclick="filterMyRecords()">👤 My Submissions</button>
     </div>
@@ -313,7 +313,7 @@
       Host: 17,
       Owner: 18
     };
-
+    let mySubmissionsActive = false;
     // =========================
     // MSAL SETUP
     // =========================
@@ -432,7 +432,14 @@
       const res = await fetch(url, { ...options, headers });
       return res;
     }
-
+    function showMySubmissions() {
+      mySubmissionsActive = true;
+    
+      const currentUser = getCurrentUserName();
+      const filtered = records.filter(r => r.owner === currentUser);
+    
+      renderTable(filtered);
+    }
     // =========================
     // Resolve site + drive + itemId
     // =========================
@@ -610,11 +617,11 @@
     // =========================
     // UI rendering + permissions
     // =========================
-    function renderTable() {
+    function renderTable(data = records) {
       const tbody = document.getElementById("tableBody");
       const empty = document.getElementById("emptyState");
 
-      if (!records || records.length === 0) {
+      if (!data || records.length === 0) {
         tbody.innerHTML = "";
         empty.style.display = "block";
         return;
@@ -622,7 +629,7 @@
 
       empty.style.display = "none";
 
-      tbody.innerHTML = records.map(rec => `
+      tbody.innerHTML = data.map(rec => `
         <tr>
           <td>${escapeHtml(rec.product)}</td>
           <td>${escapeHtml(rec.productArea)}</td>
@@ -758,7 +765,13 @@
         setStatus("Loading from Excel...");
         const rows = await loadEvents();
         records = reduceEventsToRecords(rows);
-        renderTable();
+        if (mySubmissionsActive) {
+          const currentUser = getCurrentUserName();
+          const filtered = records.filter(r => r.owner === currentUser);
+          renderTable(filtered);
+        } else {
+          renderTable();
+        }
         setStatus(`Loaded ${records.length} active record(s).`);
         showDebug(`Rows: ${rows.length}\nActive: ${records.length}\nDrive: ${cachedDriveId}\nItem: ${cachedItemId}`);
       } catch (e) {
