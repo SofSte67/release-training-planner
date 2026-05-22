@@ -107,7 +107,7 @@
       <button class="btn btn-primary" onclick="openModal()">+ Add New Record</button>
       <button class="btn btn-secondary" onclick="mySubmissionsActive = false; loadData()">🔄 Refresh</button>
       <button class="btn btn-secondary" onclick="toggleDebug()">🧪 Debug</button>
-      <button class="btn btn-secondary" onclick="filterMyRecords()">👤 My Submissions</button>
+      <button class="btn btn-secondary" onclick="mySubmissionsActive = true; loadData()">👤 My Submissions</button>
     </div>
 
     <div class="table-wrapper">
@@ -621,7 +621,7 @@
       const tbody = document.getElementById("tableBody");
       const empty = document.getElementById("emptyState");
 
-      if (!data || records.length === 0) {
+      if (!data || data.length === 0) {
         tbody.innerHTML = "";
         empty.style.display = "block";
         return;
@@ -781,25 +781,7 @@
       }
     }
 
-    function filterMyRecords() {
-    const currentUser = getCurrentUserName();
-
-    const filtered = records.filter(r => r.owner === currentUser);
-
-    renderFilteredTable(filtered);
-  }
-function renderFilteredTable(filteredRecords) {
-  const tbody = document.getElementById("tableBody");
-  const empty = document.getElementById("emptyState");
-
-  if (!filteredRecords || filteredRecords.length === 0) {
-    tbody.innerHTML = "";
-    empty.style.display = "block";
-    empty.textContent = "No records found for you.";
-    return;
-  }
-
-  empty.style.display = "none";
+      empty.style.display = "none";
 
   tbody.innerHTML = filteredRecords.map(rec => `
     <tr>
