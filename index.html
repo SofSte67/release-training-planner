@@ -405,15 +405,20 @@
     }
 
     async function ensureToken() {
-      const request = { scopes: SCOPES, account: getAccount() };
-      try {
-        const result = await msalInstance.acquireTokenSilent(request);
-        accessToken = result.accessToken;
-        return accessToken;
-      } catch (err) {
-        await msalInstance.acquireTokenRedirect(request);
-      }
-    }
+  const account = getAccount();
+  if (!account) throw new Error("Not signed in.");
+
+  const request = { scopes: SCOPES, account };
+
+  try {
+    const result = await msalInstance.acquireTokenSilent(request);
+    accessToken = result.accessToken;
+    return accessToken;
+  } catch (err) {
+    await msalInstance.acquireTokenRedirect(request);
+    throw new Error("Redirecting for login — retry after sign-in.");
+  }
+}
 
     // One fetch wrapper (always adds Authorization + workbook session header if present)
     async function graphFetch(url, options = {}) {
