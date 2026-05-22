@@ -107,6 +107,7 @@
       <button class="btn btn-primary" onclick="openModal()">+ Add New Record</button>
       <button class="btn btn-secondary" onclick="loadData()">🔄 Refresh</button>
       <button class="btn btn-secondary" onclick="toggleDebug()">🧪 Debug</button>
+      <button class="btn btn-secondary" onclick="filterMyRecords()">👤 My Submissions</button>
     </div>
 
     <div class="table-wrapper">
@@ -767,6 +768,60 @@
       }
     }
 
+    function filterMyRecords() {
+    const currentUser = getCurrentUserName();
+
+    const filtered = records.filter(r => r.owner === currentUser);
+
+    renderFilteredTable(filtered);
+  }
+function renderFilteredTable(filteredRecords) {
+  const tbody = document.getElementById("tableBody");
+  const empty = document.getElementById("emptyState");
+
+  if (!filteredRecords || filteredRecords.length === 0) {
+    tbody.innerHTML = "";
+    empty.style.display = "block";
+    empty.textContent = "No records found for you.";
+    return;
+  }
+
+  empty.style.display = "none";
+
+  tbody.innerHTML = filteredRecords.map(rec => `
+    <tr>
+      <td>${escapeHtml(rec.product)}</td>
+      <td>${escapeHtml(rec.productArea)}</td>
+      <td>${escapeHtml(rec.sessionName)}</td>
+      <td>${escapeHtml(rec.description)}</td>
+      <td>${escapeHtml(rec.trainingLevel)}</td>
+      <td>${escapeHtml(rec.typeOfSession)}</td>
+      <td>${escapeHtml(rec.dateTime)}</td>
+      <td>${escapeHtml(rec.duration)}</td>
+      <td>${escapeHtml(rec.adoptionReady)}</td>
+      <td>${escapeHtml(rec.featureRelease)}</td>
+      <td>${escapeHtml(rec.restrictedAccess)}</td>
+      <td>${escapeHtml(rec.limitedAvailable)}</td>
+      <td>${escapeHtml(rec.host)}</td>
+      <td>${escapeHtml(rec.owner)}</td>
+      <td>
+        <div class="actions">
+          ${
+            rec.owner === getCurrentUserName()
+              ? `<button class="btn btn-sm btn-secondary" onclick="editRecord('${rec.recordId}')">Edit</button>`
+              : `<button class="btn btn-sm btn-secondary" disabled>Edit</button>`
+          }
+          <button class="btn btn-sm btn-secondary" onclick="duplicateRecord('${rec.recordId}')">Duplicate</button>
+          ${
+            rec.owner === getCurrentUserName()
+              ? `<button class="btn btn-sm btn-danger" onclick="softDeleteRecord('${rec.recordId}')">Delete</button>`
+              : `<button class="btn btn-sm btn-danger" disabled>Delete</button>`
+          }
+        </div>
+      </td>
+    </tr>
+  `).join("");
+}
     function findRecord(recordId) {
       return records.find(r => r.recordId === recordId);
     }
