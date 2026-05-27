@@ -992,6 +992,7 @@ function renderFilteredTable(filteredRecords) {
           showLoggedInUI();
           setStatus("Signed in. Ready (Refresh to load).");
           showDebug("Signed in.");
+          await loadData();
         } else {
           setStatus("Not signed in.");
           showDebug("Not signed in yet.");
@@ -1001,7 +1002,6 @@ function renderFilteredTable(filteredRecords) {
         showDebug(e?.message || String(e));
       }
     })();
-   alert("JS is running");
-  </script>
+    </script>
 </body>
 </html>
