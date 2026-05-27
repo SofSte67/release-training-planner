@@ -34,6 +34,16 @@
       flex-wrap:wrap;
       align-items:center;
     }
+    .table-scroll-top {
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 16px;
+  margin-bottom: 4px;
+}
+
+  .table-scroll-top div {
+    height: 1px;
+  }
     .btn {
       padding: 10px 16px; border: none; border-radius: 10px; cursor: pointer;
       font-size: 14px; font-weight:600;
@@ -147,8 +157,10 @@
 
       <div id="activeFilterBadge" class="active-filter-badge"></div>
     </div>
-
-    <div class="table-wrapper">
+    <div class="table-scroll-top" id="topScroll">
+      <div></div>
+    </div>
+    <div class="table-wrapper" id="tableWrapper">
       <table>
         <thead>
           <tr>
@@ -480,7 +492,26 @@
 
       loadData();
     }
+function syncTopScrollbar() {
+  const top = document.getElementById("topScroll");
+  const wrapper = document.getElementById("tableWrapper");
 
+  if (!top || !wrapper) return;
+
+  const table = wrapper.querySelector("table");
+  if (table) {
+    top.firstElementChild.style.width = table.scrollWidth + "px";
+  }
+
+  // Prevent multiple event bindings
+  top.onscroll = () => {
+    wrapper.scrollLeft = top.scrollLeft;
+  };
+
+  wrapper.onscroll = () => {
+    top.scrollLeft = wrapper.scrollLeft;
+  };
+}
     // =========================
     // Auth
     // =========================
@@ -717,6 +748,7 @@
             ? "No records found for you."
             : "No records yet. Select + Add New Record to get started.";
         return;
+        syncTopScrollbar();
       }
 
       empty.style.display = "none";
