@@ -27,7 +27,13 @@
       background:#f6f7f9; border:1px solid #e7e9ef;
       padding:8px 10px; border-radius:10px;
     }
-    .toolbar { margin: 12px 0 14px; display:flex; gap:10px; flex-wrap:wrap; }
+    .toolbar {
+      margin: 12px 0 14px;
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
     .btn {
       padding: 10px 16px; border: none; border-radius: 10px; cursor: pointer;
       font-size: 14px; font-weight:600;
@@ -39,6 +45,25 @@
     .btn-danger { background:#dc3545; color:#fff; }
     .btn-danger:hover { background:#b02a37; }
     .btn:disabled { opacity:0.6; cursor:not-allowed; }
+
+    .filter-input {
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      font-size: 14px;
+      min-width: 240px;
+      background: #fff;
+    }
+
+    .active-filter-badge {
+      font-size: 13px;
+      color: #0f5132;
+      background: #d1e7dd;
+      border: 1px solid #badbcc;
+      padding: 8px 10px;
+      border-radius: 10px;
+      display: none;
+    }
 
     .table-wrapper { overflow-x:auto; }
     table {
@@ -108,6 +133,19 @@
       <button class="btn btn-secondary" onclick="refreshAllRecords()">🔄 Refresh</button>
       <button class="btn btn-secondary" onclick="toggleDebug()">🧪 Debug</button>
       <button class="btn btn-secondary" onclick="filterMyRecords()">👤 My Submissions</button>
+
+      <input
+        type="text"
+        id="productFilterInput"
+        class="filter-input"
+        placeholder="Type product name..."
+        onkeydown="handleProductFilterKeydown(event)"
+      />
+
+      <button class="btn btn-secondary" onclick="filterByProduct()">🔎 Filter Product</button>
+      <button class="btn btn-secondary" onclick="clearProductFilter()">✖ Clear Filter</button>
+
+      <div id="activeFilterBadge" class="active-filter-badge"></div>
     </div>
 
     <div class="table-wrapper">
@@ -316,6 +354,8 @@
 
     // View state
     let mySubmissionsActive = false;
+    let productFilterActive = false;
+    let currentProductFilter = "";
 
     // =========================
     // MSAL SETUP
@@ -389,20 +429,55 @@
       return acct?.username || acct?.name || "";
     }
 
+    function updateActiveFilterBadge() {
+      const badge = document.getElementById("activeFilterBadge");
+      if (!badge) return;
+
+      if (productFilterActive && currentProductFilter.trim()) {
+        badge.textContent = `Active product filter: ${currentProductFilter}`;
+        badge.style.display = "inline-block";
+        return;
+      }
+
+      if (mySubmissionsActive) {
+        badge.textContent = "Active filter: My Submissions";
+        badge.style.display = "inline-block";
+        return;
+      }
+
+      badge.textContent = "";
+      badge.style.display = "none";
+    }
+
     function getVisibleRecords() {
+      if (productFilterActive && currentProductFilter.trim()) {
+        const filterValue = currentProductFilter.trim().toLowerCase();
+        return records.filter(r =>
+          String(r.product || "").toLowerCase().includes(filterValue)
+        );
+      }
+
       if (mySubmissionsActive) {
         const currentUser = getCurrentUserName();
         return records.filter(r => r.owner === currentUser);
       }
+
       return records;
     }
 
     function renderCurrentView() {
       renderTable(getVisibleRecords());
+      updateActiveFilterBadge();
     }
 
     function refreshAllRecords() {
       mySubmissionsActive = false;
+      productFilterActive = false;
+      currentProductFilter = "";
+
+      const input = document.getElementById("productFilterInput");
+      if (input) input.value = "";
+
       loadData();
     }
 
@@ -636,9 +711,11 @@
       if (!data || data.length === 0) {
         tbody.innerHTML = "";
         empty.style.display = "block";
-        empty.textContent = mySubmissionsActive
-          ? "No records found for you."
-          : "No records yet. Select + Add New Record to get started.";
+        empty.textContent = productFilterActive
+          ? `No records found for product "${currentProductFilter}".`
+          : mySubmissionsActive
+            ? "No records found for you."
+            : "No records yet. Select + Add New Record to get started.";
         return;
       }
 
@@ -773,11 +850,68 @@
     }
 
     // =========================
+    // Filters
+    // =========================
+    function filterMyRecords() {
+      mySubmissionsActive = true;
+      productFilterActive = false;
+      currentProductFilter = "";
+
+      const input = document.getElementById("productFilterInput");
+      if (input) input.value = "";
+
+      renderCurrentView();
+      setStatus(`Showing ${getVisibleRecords().length} of your active record(s).`);
+    }
+
+    function filterByProduct() {
+      const input = document.getElementById("productFilterInput");
+      const value = (input?.value || "").trim();
+
+      if (!value) {
+        clearProductFilter();
+        return;
+      }
+
+      productFilterActive = true;
+      currentProductFilter = value;
+      mySubmissionsActive = false;
+
+      renderCurrentView();
+      setStatus(`Showing ${getVisibleRecords().length} record(s) for product filter: "${value}".`);
+    }
+
+    function clearProductFilter() {
+      productFilterActive = false;
+      currentProductFilter = "";
+
+      const input = document.getElementById("productFilterInput");
+      if (input) input.value = "";
+
+      renderCurrentView();
+      setStatus(`Showing ${getVisibleRecords().length} active record(s).`);
+    }
+
+    function handleProductFilterKeydown(event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        filterByProduct();
+      }
+    }
+
+    // =========================
     // CRUD via event log
     // =========================
     async function loadData() {
       try {
-        setStatus(mySubmissionsActive ? "Loading your submissions..." : "Loading from Excel...");
+        setStatus(
+          productFilterActive
+            ? `Loading records for product filter: "${currentProductFilter}"...`
+            : mySubmissionsActive
+              ? "Loading your submissions..."
+              : "Loading from Excel..."
+        );
+
         const rows = await loadEvents();
         records = reduceEventsToRecords(rows);
 
@@ -785,23 +919,28 @@
 
         const visibleCount = getVisibleRecords().length;
         setStatus(
-          mySubmissionsActive
-            ? `Loaded ${visibleCount} of your active record(s).`
-            : `Loaded ${records.length} active record(s).`
+          productFilterActive
+            ? `Loaded ${visibleCount} filtered record(s) for "${currentProductFilter}".`
+            : mySubmissionsActive
+              ? `Loaded ${visibleCount} of your active record(s).`
+              : `Loaded ${records.length} active record(s).`
         );
 
-        showDebug(`Rows: ${rows.length}\nActive: ${records.length}\nVisible: ${visibleCount}\nMy submissions active: ${mySubmissionsActive}\nDrive: ${cachedDriveId}\nItem: ${cachedItemId}`);
+        showDebug(
+          `Rows: ${rows.length}
+Active: ${records.length}
+Visible: ${visibleCount}
+My submissions active: ${mySubmissionsActive}
+Product filter active: ${productFilterActive}
+Current product filter: ${currentProductFilter}
+Drive: ${cachedDriveId}
+Item: ${cachedItemId}`
+        );
       } catch (e) {
         setStatus("❌ Load failed.");
         showDebug(e?.message || String(e));
         alert("Load failed:\n\n" + (e?.message || String(e)));
       }
-    }
-
-    function filterMyRecords() {
-      mySubmissionsActive = true;
-      renderCurrentView();
-      setStatus(`Showing ${getVisibleRecords().length} of your active record(s).`);
     }
 
     function findRecord(recordId) {
@@ -867,7 +1006,13 @@
         setStatus("Duplicating...");
         await upsertRecord(null, newData);
         await loadData();
-        setStatus(mySubmissionsActive ? "Duplicated. Still showing your submissions." : "Duplicated.");
+        setStatus(
+          productFilterActive
+            ? `Duplicated. Still showing filtered records for "${currentProductFilter}".`
+            : mySubmissionsActive
+              ? "Duplicated. Still showing your submissions."
+              : "Duplicated."
+        );
       } catch (e) {
         setStatus("❌ Duplicate failed.");
         alert("Duplicate failed:\n\n" + (e?.message || String(e)));
@@ -888,7 +1033,13 @@
         setStatus("Deleting...");
         await softDelete(recordId);
         await loadData();
-        setStatus(mySubmissionsActive ? "Deleted (soft). Still showing your submissions." : "Deleted (soft).");
+        setStatus(
+          productFilterActive
+            ? `Deleted (soft). Still showing filtered records for "${currentProductFilter}".`
+            : mySubmissionsActive
+              ? "Deleted (soft). Still showing your submissions."
+              : "Deleted (soft)."
+        );
       } catch (e) {
         setStatus("❌ Delete failed.");
         alert("Delete failed:\n\n" + (e?.message || String(e)));
@@ -934,7 +1085,13 @@
         await upsertRecord(recordId, data);
         closeModal();
         await loadData();
-        setStatus(mySubmissionsActive ? "Saved. Still showing your submissions." : "Saved.");
+        setStatus(
+          productFilterActive
+            ? `Saved. Still showing filtered records for "${currentProductFilter}".`
+            : mySubmissionsActive
+              ? "Saved. Still showing your submissions."
+              : "Saved."
+        );
       } catch (err) {
         setStatus("❌ Save failed.");
         alert("Save failed:\n\n" + (err?.message || String(err)));
