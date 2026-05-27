@@ -1,4 +1,3 @@
- 
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -105,7 +104,7 @@
 
     <div class="toolbar">
       <button class="btn btn-primary" onclick="openModal()">+ Add New Record</button>
-      <button class="btn btn-secondary" onclick="mySubmissionsActive = false; loadData()">🔄 Refresh</button>
+      <button class="btn btn-secondary" onclick="refreshAllRecords()">🔄 Refresh</button>
       <button class="btn btn-secondary" onclick="toggleDebug()">🧪 Debug</button>
       <button class="btn btn-secondary" onclick="filterMyRecords()">👤 My Submissions</button>
     </div>
@@ -282,11 +281,11 @@
       tenantId: "457d5685-0467-4d05-b23b-8f817adda47c",
       sharepointHost: "inforonline.sharepoint.com",
       sitePath: "sites/LaunchManagementOperations",
-      libraryName: "Documents" // <-- keep Documents if possible
+      libraryName: "Documents"
     };
 
     // Path INSIDE the library (do NOT include the library name)
-    const FILE_PATH = "2026_Oct_RTP.xlsx"; // or "Release Training Plan/2026.10/2026_Oct_RTP.xlsx"
+    const FILE_PATH = "2026_Oct_RTP.xlsx";
 
     // Excel TABLE name inside the workbook for the event log
     const TABLE_NAME = "RTPEvents";
@@ -313,7 +312,10 @@
       Host: 17,
       Owner: 18
     };
+
+    // View state
     let mySubmissionsActive = false;
+
     // =========================
     // MSAL SETUP
     // =========================
@@ -375,13 +377,32 @@
     }
 
     function getAccount() { return msalInstance.getActiveAccount(); }
+
     function getActor() {
       const acct = getAccount();
       return acct?.username || acct?.name || "Anonymous";
     }
+
     function getCurrentUserName() {
       const acct = getAccount();
       return acct?.username || acct?.name || "";
+    }
+
+    function getVisibleRecords() {
+      if (mySubmissionsActive) {
+        const currentUser = getCurrentUserName();
+        return records.filter(r => r.owner === currentUser);
+      }
+      return records;
+    }
+
+    function renderCurrentView() {
+      renderTable(getVisibleRecords());
+    }
+
+    function refreshAllRecords() {
+      mySubmissionsActive = false;
+      loadData();
     }
 
     // =========================
@@ -406,20 +427,20 @@
     }
 
     async function ensureToken() {
-  const account = getAccount();
-  if (!account) throw new Error("Not signed in.");
+      const account = getAccount();
+      if (!account) throw new Error("Not signed in.");
 
-  const request = { scopes: SCOPES, account };
+      const request = { scopes: SCOPES, account };
 
-  try {
-    const result = await msalInstance.acquireTokenSilent(request);
-    accessToken = result.accessToken;
-    return accessToken;
-  } catch (err) {
-    await msalInstance.acquireTokenRedirect(request);
-    throw new Error("Redirecting for login — retry after sign-in.");
-  }
-}
+      try {
+        const result = await msalInstance.acquireTokenSilent(request);
+        accessToken = result.accessToken;
+        return accessToken;
+      } catch (err) {
+        await msalInstance.acquireTokenRedirect(request);
+        throw new Error("Redirecting for login — retry after sign-in.");
+      }
+    }
 
     // One fetch wrapper (always adds Authorization + workbook session header if present)
     async function graphFetch(url, options = {}) {
@@ -432,14 +453,7 @@
       const res = await fetch(url, { ...options, headers });
       return res;
     }
-    function showMySubmissions() {
-      mySubmissionsActive = true;
-    
-      const currentUser = getCurrentUserName();
-      const filtered = records.filter(r => r.owner === currentUser);
-    
-      renderTable(filtered);
-    }
+
     // =========================
     // Resolve site + drive + itemId
     // =========================
@@ -538,17 +552,14 @@
       const itemId = await getFileItemId();
 
       const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/tables/${TABLE_NAME}/rows/add`;
-      // Get total column count dynamically
-      const columnCount = 23; // <-- CHANGE THIS NUMBER to your actual total columns
-      
-      // Pad row with empty values
+
+      const columnCount = 23;
       const paddedRow = [...valuesRow];
-      
       while (paddedRow.length < columnCount) {
         paddedRow.push("");
       }
-      
-      const body = { index: null, values: [ paddedRow ] };
+
+      const body = { index: null, values: [paddedRow] };
 
       const res = await graphFetch(url, {
         method: "POST",
@@ -621,9 +632,12 @@
       const tbody = document.getElementById("tableBody");
       const empty = document.getElementById("emptyState");
 
-      if (!data || records.length === 0) {
+      if (!data || data.length === 0) {
         tbody.innerHTML = "";
         empty.style.display = "block";
+        empty.textContent = mySubmissionsActive
+          ? "No records found for you."
+          : "No records yet. Select + Add New Record to get started.";
         return;
       }
 
@@ -697,7 +711,6 @@
         document.getElementById("recordId").value = "";
       }
 
-      // Owner is always current user and locked
       const ownerEl = document.getElementById("owner");
       ownerEl.value = getCurrentUserName();
       ownerEl.readOnly = true;
@@ -728,6 +741,7 @@
     function validateForm() {
       let ok = true;
       const requiredIds = ["product","productArea","sessionName","description","trainingLevel","typeOfSession","duration","adoptionReady","featureRelease","restrictedAccess","limitedAvailable","host","owner"];
+
       for (const id of requiredIds) {
         const el = document.getElementById(id);
         if (!String(el.value || "").trim()) {
@@ -762,18 +776,20 @@
     // =========================
     async function loadData() {
       try {
-        setStatus("Loading from Excel...");
+        setStatus(mySubmissionsActive ? "Loading your submissions..." : "Loading from Excel...");
         const rows = await loadEvents();
         records = reduceEventsToRecords(rows);
-        if (mySubmissionsActive) {
-          const currentUser = getCurrentUserName();
-          const filtered = records.filter(r => r.owner === currentUser);
-          renderTable(filtered);
-        } else {
-          renderTable();
-        }
-        setStatus(`Loaded ${records.length} active record(s).`);
-        showDebug(`Rows: ${rows.length}\nActive: ${records.length}\nDrive: ${cachedDriveId}\nItem: ${cachedItemId}`);
+
+        renderCurrentView();
+
+        const visibleCount = getVisibleRecords().length;
+        setStatus(
+          mySubmissionsActive
+            ? `Loaded ${visibleCount} of your active record(s).`
+            : `Loaded ${records.length} active record(s).`
+        );
+
+        showDebug(`Rows: ${rows.length}\nActive: ${records.length}\nVisible: ${visibleCount}\nMy submissions active: ${mySubmissionsActive}\nDrive: ${cachedDriveId}\nItem: ${cachedItemId}`);
       } catch (e) {
         setStatus("❌ Load failed.");
         showDebug(e?.message || String(e));
@@ -782,59 +798,11 @@
     }
 
     function filterMyRecords() {
-    const currentUser = getCurrentUserName();
+      mySubmissionsActive = true;
+      renderCurrentView();
+      setStatus(`Showing ${getVisibleRecords().length} of your active record(s).`);
+    }
 
-    const filtered = records.filter(r => r.owner === currentUser);
-
-    renderFilteredTable(filtered);
-  }
-function renderFilteredTable(filteredRecords) {
-  const tbody = document.getElementById("tableBody");
-  const empty = document.getElementById("emptyState");
-
-  if (!filteredRecords || filteredRecords.length === 0) {
-    tbody.innerHTML = "";
-    empty.style.display = "block";
-    empty.textContent = "No records found for you.";
-    return;
-  }
-
-  empty.style.display = "none";
-
-  tbody.innerHTML = filteredRecords.map(rec => `
-    <tr>
-      <td>${escapeHtml(rec.product)}</td>
-      <td>${escapeHtml(rec.productArea)}</td>
-      <td>${escapeHtml(rec.sessionName)}</td>
-      <td>${escapeHtml(rec.description)}</td>
-      <td>${escapeHtml(rec.trainingLevel)}</td>
-      <td>${escapeHtml(rec.typeOfSession)}</td>
-      <td>${escapeHtml(rec.dateTime)}</td>
-      <td>${escapeHtml(rec.duration)}</td>
-      <td>${escapeHtml(rec.adoptionReady)}</td>
-      <td>${escapeHtml(rec.featureRelease)}</td>
-      <td>${escapeHtml(rec.restrictedAccess)}</td>
-      <td>${escapeHtml(rec.limitedAvailable)}</td>
-      <td>${escapeHtml(rec.host)}</td>
-      <td>${escapeHtml(rec.owner)}</td>
-      <td>
-        <div class="actions">
-          ${
-            rec.owner === getCurrentUserName()
-              ? `<button class="btn btn-sm btn-secondary" onclick="editRecord('${rec.recordId}')">Edit</button>`
-              : `<button class="btn btn-sm btn-secondary" disabled>Edit</button>`
-          }
-          <button class="btn btn-sm btn-secondary" onclick="duplicateRecord('${rec.recordId}')">Duplicate</button>
-          ${
-            rec.owner === getCurrentUserName()
-              ? `<button class="btn btn-sm btn-danger" onclick="softDeleteRecord('${rec.recordId}')">Delete</button>`
-              : `<button class="btn btn-sm btn-danger" disabled>Delete</button>`
-          }
-        </div>
-      </td>
-    </tr>
-  `).join("");
-}
     function findRecord(recordId) {
       return records.find(r => r.recordId === recordId);
     }
@@ -893,11 +861,12 @@ function renderFilteredTable(filteredRecords) {
       if (!rec) return;
 
       const newData = { ...rec, owner: getCurrentUserName() };
+
       try {
         setStatus("Duplicating...");
         await upsertRecord(null, newData);
         await loadData();
-        setStatus("Duplicated.");
+        setStatus(mySubmissionsActive ? "Duplicated. Still showing your submissions." : "Duplicated.");
       } catch (e) {
         setStatus("❌ Duplicate failed.");
         alert("Duplicate failed:\n\n" + (e?.message || String(e)));
@@ -918,7 +887,7 @@ function renderFilteredTable(filteredRecords) {
         setStatus("Deleting...");
         await softDelete(recordId);
         await loadData();
-        setStatus("Deleted (soft).");
+        setStatus(mySubmissionsActive ? "Deleted (soft). Still showing your submissions." : "Deleted (soft).");
       } catch (e) {
         setStatus("❌ Delete failed.");
         alert("Delete failed:\n\n" + (e?.message || String(e)));
@@ -964,7 +933,7 @@ function renderFilteredTable(filteredRecords) {
         await upsertRecord(recordId, data);
         closeModal();
         await loadData();
-        setStatus("Saved.");
+        setStatus(mySubmissionsActive ? "Saved. Still showing your submissions." : "Saved.");
       } catch (err) {
         setStatus("❌ Save failed.");
         alert("Save failed:\n\n" + (err?.message || String(err)));
@@ -1002,6 +971,6 @@ function renderFilteredTable(filteredRecords) {
         showDebug(e?.message || String(e));
       }
     })();
-    </script>
+  </script>
 </body>
 </html>
