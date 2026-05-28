@@ -142,7 +142,7 @@
 
   <!-- ✅ Read Me ABOVE everything -->
   <div class="row" style="margin-bottom:10px;">
-    <button class="btn btn-warning btn-attention" onclick="openReadMe()">📘 Read Me</button>
+   <button id="readMeBtn" class="btn btn-warning btn-attention" onclick="openReadMe()">📘 Read Me</button>
   </div>
 
   <div class="row">
@@ -513,8 +513,14 @@
     }
 
       function openReadMe() {
-    document.getElementById("readMeModal").classList.add("active");
-  }
+  document.getElementById("readMeModal").classList.add("active");
+
+  // ✅ Stop blinking permanently
+  localStorage.setItem("readMeSeen", "true");
+
+  const btn = document.getElementById("readMeBtn");
+  if (btn) btn.classList.remove("btn-attention");
+}
   
   function closeReadMe() {
     document.getElementById("readMeModal").classList.remove("active");
@@ -1200,12 +1206,25 @@ Item: ${cachedItemId}`
     })();
 
     window.addEventListener("resize", refreshTopScrollbar);
-    window.addEventListener("load", refreshTopScrollbar);
+    window.addEventListener("load", () => {
+  refreshTopScrollbar();
+
+  // ✅ Stop blinking if already seen before
+  if (localStorage.getItem("readMeSeen") === "true") {
+    const btn = document.getElementById("readMeBtn");
+    if (btn) btn.classList.remove("btn-attention");
+  }
+});
   </script>
   <!-- Read Me Modal -->
 <div id="readMeModal" class="modal">
   <div class="modal-content">
     <h2>📘 How to use the Release Training Planner</h2>
+    <p>
+  <a href="https://inforonline.sharepoint.com/sites/InforU-ToolsTeam/TrainingSupportServices/SitePages/Release-Training-Resource-Center.aspx?xsdata=MDV8MDF8fGUwM2JiOTYxMzFhMTRiNmE5MDNhMDhkYjlhNzg5MjFmfDQ1N2Q1Njg1MDQ2NzRkMDViMjNiOGY4MTdhZGRhNDdjfDB8MHw2MzgyNzM2MTQ4NDEzNTIyNTB8VW5rbm93bnxWR1ZoYlhOVFpXTjFjbWwwZVZObGNuWnBZMlY4ZXlKV0lqb2lNQzR3TGpBd01EQWlMQ0pRSWpvaVYybHVNeklpTENKQlRpSTZJazkwYUdWeUlpd2lWMVFpT2pFeGZRPT18MXxMMk5vWVhSekx6RTVPbVJqTldSaVpUZzVNRFJsTVRSa01qWTRaalU0Wm1JMVl6ZzVORFZqWmpreVFIUm9jbVZoWkM1Mk1pOXRaWE56WVdkbGN5OHhOamt4TnpZME5qZ3lNVEk1fGNmZDZlYzY1ZTQ1NjQ5Nzk5MDNhMDhkYjlhNzg5MjFmfGQzNjk4Nzc0MTI5OTQxMTViMzM5MDJiMGQ5NDBhNDZj&sdata=aWxHMktDVFArUHdGcWJEeE5oSm5jTDBZb3pRVWw0bEJVbUo3NTZOa1pibz0%3D&ovuser=457d5685-0467-4d05-b23b-8f817adda47c%2Culrika.borg%40infor.com&OR=Teams-HL&CT=1692090432721&clickparams=eyJBcHBOYW1lIjoiVGVhbXMtRGVza3RvcCIsIkFwcFZlcnNpb24iOiIyNy8yMzA3MTMyNzExNiIsIkhhc0ZlZGVyYXRlZFVzZXIiOmZhbHNlfQ%3D%3D#templates-and-naming-convention" target="_blank" class="btn btn-primary">
+    Release Training Resource Center
+  </a>
+</p>
 
     <div style="font-size:14px; line-height:1.5;">
      <p><strong>1. Log in first</strong><br>
