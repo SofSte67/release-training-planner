@@ -109,6 +109,7 @@ td:nth-child(1) {
   left: 0;
   background: #fff;
   z-index: 10;
+  border-right: 1px solid #ddd;
 }
 
 /* Freeze column 2 */
@@ -118,6 +119,8 @@ td:nth-child(2) {
   left: var(--col1-width);
   background: #fff;
   z-index: 10;
+  border-left: none;
+  box-shadow: -2px 0 2px -2px rgba(0,0,0,0.2); 
 }
 
 /* Ensure header stays above frozen columns */
