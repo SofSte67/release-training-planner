@@ -115,7 +115,7 @@ td:nth-child(1) {
 th:nth-child(2),
 td:nth-child(2) {
   position: sticky;
-  left: 180px; /* must match col 1 width */
+  left: var(--col1-width);
   background: #fff;
   z-index: 10;
 }
@@ -841,6 +841,7 @@ thead th:nth-child(2) {
             : "No records yet. Select + Add New Record to get started.";
         refreshTopScrollbar();
         return;
+        updateStickyOffsets();
       }
 
       empty.style.display = "none";
@@ -1267,6 +1268,19 @@ Item: ${cachedItemId}`
     if (btn) btn.classList.remove("btn-attention");
   }
 });
+    function updateStickyOffsets() {
+  const col1 = document.querySelector("th:nth-child(1)");
+  if (!col1) return;
+
+  const width = col1.offsetWidth;
+
+  document.documentElement.style.setProperty("--col1-width", width + "px");
+}
+
+window.addEventListener("load", updateStickyOffsets);
+window.addEventListener("resize", updateStickyOffsets);
+
+    
   </script>
   <!-- Read Me Modal -->
 <div id="readMeModal" class="modal">
