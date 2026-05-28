@@ -32,6 +32,7 @@
       gap:10px;
       flex-wrap:wrap;
       align-items:center;
+      <button class="btn btn-secondary" onclick="openReadMe()">📘 Read Me</button>
     }
     .btn {
       padding: 10px 16px; border: none; border-radius: 10px; cursor: pointer;
@@ -497,6 +498,13 @@
       loadData();
     }
 
+      function openReadMe() {
+    document.getElementById("readMeModal").classList.add("active");
+  }
+  
+  function closeReadMe() {
+    document.getElementById("readMeModal").classList.remove("active");
+  }
     function syncTopScrollbar() {
       const topBar = document.getElementById("topScrollBar");
       const topInner = document.getElementById("topScrollInner");
@@ -1180,5 +1188,38 @@ Item: ${cachedItemId}`
     window.addEventListener("resize", refreshTopScrollbar);
     window.addEventListener("load", refreshTopScrollbar);
   </script>
+  <!-- Read Me Modal -->
+<div id="readMeModal" class="modal">
+  <div class="modal-content">
+    <h2>📘 How to use the Release Training Planner</h2>
+
+    <div style="font-size:14px; line-height:1.5;">
+
+      <p><strong>1. Add records</strong><br>
+      Use <b>+ Add New Record</b> to submit training sessions.</p>
+
+      <p><strong>2. Edit/Delete</strong><br>
+      Only the <b>Submitter</b> can modify or delete a record.</p>
+
+      <p><strong>3. Duplicate</strong><br>
+      Use <b>Duplicate</b> to quickly reuse an existing session.</p>
+
+      <p><strong>4. Filters</strong><br>
+      - <b>My Submissions</b>: shows your records<br>
+      - <b>Product filter</b>: search by product name</p>
+
+      <p><strong>5. Scrolling</strong><br>
+      Use the <b>top scrollbar</b> to navigate wide tables.</p>
+
+      <p><strong>6. Data handling</strong><br>
+      All changes are saved as events (no data is overwritten).</p>
+
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="closeReadMe()">Close</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
