@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -34,16 +33,6 @@
       flex-wrap:wrap;
       align-items:center;
     }
-    .table-scroll-top {
-  overflow-x: auto;
-  overflow-y: hidden;
-  height: 16px;
-  margin-bottom: 4px;
-}
-
-  .table-scroll-top div {
-    height: 1px;
-  }
     .btn {
       padding: 10px 16px; border: none; border-radius: 10px; cursor: pointer;
       font-size: 14px; font-weight:600;
@@ -73,6 +62,18 @@
       padding: 8px 10px;
       border-radius: 10px;
       display: none;
+    }
+
+    /* Top horizontal scrollbar */
+    .table-scroll-top {
+      overflow-x: auto;
+      overflow-y: hidden;
+      height: 18px;
+      margin: 0 0 6px 0;
+      background: transparent;
+    }
+    .table-scroll-top-inner {
+      height: 1px;
     }
 
     .table-wrapper { overflow-x:auto; }
@@ -157,11 +158,14 @@
 
       <div id="activeFilterBadge" class="active-filter-badge"></div>
     </div>
-    <div class="table-scroll-top" id="topScroll">
-      <div></div>
+
+    <!-- Top horizontal scrollbar -->
+    <div class="table-scroll-top" id="topScrollBar">
+      <div class="table-scroll-top-inner" id="topScrollInner"></div>
     </div>
+
     <div class="table-wrapper" id="tableWrapper">
-      <table>
+      <table id="recordsTable">
         <thead>
           <tr>
             <th>Product</th>
@@ -492,26 +496,34 @@
 
       loadData();
     }
-function syncTopScrollbar() {
-  const top = document.getElementById("topScroll");
-  const wrapper = document.getElementById("tableWrapper");
 
-  if (!top || !wrapper) return;
+    function syncTopScrollbar() {
+      const topBar = document.getElementById("topScrollBar");
+      const topInner = document.getElementById("topScrollInner");
+      const wrapper = document.getElementById("tableWrapper");
+      const table = document.getElementById("recordsTable");
 
-  const table = wrapper.querySelector("table");
-  if (table) {
-    top.firstElementChild.style.width = table.scrollWidth + "px";
-  }
+      if (!topBar || !topInner || !wrapper || !table) return;
 
-  // Prevent multiple event bindings
-  top.onscroll = () => {
-    wrapper.scrollLeft = top.scrollLeft;
-  };
+      topInner.style.width = table.scrollWidth + "px";
 
-  wrapper.onscroll = () => {
-    top.scrollLeft = wrapper.scrollLeft;
-  };
-}
+      if (!topBar.dataset.bound) {
+        topBar.addEventListener("scroll", () => {
+          wrapper.scrollLeft = topBar.scrollLeft;
+        });
+        wrapper.addEventListener("scroll", () => {
+          topBar.scrollLeft = wrapper.scrollLeft;
+        });
+        topBar.dataset.bound = "true";
+      }
+    }
+
+    function refreshTopScrollbar() {
+      requestAnimationFrame(() => {
+        syncTopScrollbar();
+      });
+    }
+
     // =========================
     // Auth
     // =========================
@@ -747,8 +759,8 @@ function syncTopScrollbar() {
           : mySubmissionsActive
             ? "No records found for you."
             : "No records yet. Select + Add New Record to get started.";
+        refreshTopScrollbar();
         return;
-        syncTopScrollbar();
       }
 
       empty.style.display = "none";
@@ -786,6 +798,8 @@ function syncTopScrollbar() {
           </td>
         </tr>
       `).join("");
+
+      refreshTopScrollbar();
     }
 
     // =========================
@@ -1155,12 +1169,16 @@ Item: ${cachedItemId}`
         } else {
           setStatus("Not signed in.");
           showDebug("Not signed in yet.");
+          refreshTopScrollbar();
         }
       } catch (e) {
         setStatus("❌ MSAL error.");
         showDebug(e?.message || String(e));
       }
     })();
+
+    window.addEventListener("resize", refreshTopScrollbar);
+    window.addEventListener("load", refreshTopScrollbar);
   </script>
 </body>
 </html>
