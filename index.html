@@ -653,16 +653,39 @@ thead th:nth-child(2) {
     }
 
     // One fetch wrapper (always adds Authorization + workbook session header if present)
-    async function graphFetch(url, options = {}) {
-      await ensureToken();
+    async function graphFetch(url, options = {}, retry = true) {
+  await ensureToken();
 
-      const headers = new Headers(options.headers || {});
-      headers.set("Authorization", `Bearer ${accessToken}`);
-      if (workbookSessionId) headers.set("workbook-session-id", workbookSessionId);
+  const headers = new Headers(options.headers || {});
+  headers.set("Authorization", `Bearer ${accessToken}`);
 
-      const res = await fetch(url, { ...options, headers });
-      return res;
+  if (workbookSessionId) {
+    headers.set("workbook-session-id", workbookSessionId);
+  }
+
+  let res = await fetch(url, { ...options, headers });
+
+  // ✅ HANDLE INVALID SESSION
+  if (!res.ok && retry) {
+    const text = await res.text();
+
+    if (text.includes("InvalidSession") || text.includes("invalidSession")) {
+      console.warn("Workbook session expired. Recreating session...");
+
+      // 🔹 reset session
+      workbookSessionId = null;
+      await ensureWorkbookSession();
+
+      // 🔹 retry once
+      return await graphFetch(url, options, false);
     }
+
+    // Original response if not retry case
+    return new Response(text, { status: res.status, statusText: res.statusText });
+  }
+
+  return res;
+}
 
     // =========================
     // Resolve site + drive + itemId
