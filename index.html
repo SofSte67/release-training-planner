@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -195,22 +196,33 @@ thead th:nth-child(2) {
   <main>
     <div class="user-bar">
 
-  <!-- ✅ Read Me ABOVE everything -->
-  <div class="row" style="margin-bottom:10px; justify-content:space-between;">
-  
-  <button id="readMeBtn" class="btn btn-warning btn-attention" onclick="openReadMe()">
-    📘 Read Me
-  </button>
+  <!-- ROW 1 -->
+<div>
+  <div class="readme">📘 Read Me</div>
+</div>
 
- <div class="status" style="
-  font-weight:600;
-  background:#fff3cd;
-  border:1px solid #ffeeba;
-  padding-left: 28px;
-  text-indent: -20px;
-">
-  ⏰ Final day for adding planned courses is August 5<br>
-  Live sessions must be held the week of August 24
+<!-- ROW 2 -->
+<div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+
+  <!-- LEFT SIDE -->
+  <div style="display:flex; align-items:center; gap:10px;">
+    <button class="login-btn">🔐 Login with Microsoft</button>
+    <span>Not signed in.</span>
+    <input type="text" placeholder="Type product name..." />
+  </div>
+
+  <!-- RIGHT SIDE (your banner) -->
+  <div class="status" style="
+    font-weight:600;
+    background:#fff3cd;
+    border:1px solid #ffeeba;
+    padding:10px 14px;
+    max-width:420px;
+  ">
+    ⏰ Final day for adding planned courses is August 5<br>
+    Live sessions must be held the week of August 24
+  </div>
+
 </div>
 
   <div class="row">
