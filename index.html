@@ -202,9 +202,15 @@ thead th:nth-child(2) {
 </div>
 
 <!-- ROW 2 -->
-<div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+<div style="display:flex; justify-content:space-between; align-items:center;">
 
-  <!-- RIGHT SIDE (your banner) -->
+  <!-- LEFT SIDE -->
+  <div style="display:flex; align-items:center; gap:10px;">
+    <button class="login-btn">🔐 Login with Microsoft</button>
+    <span>Not signed in.</span>
+  </div>
+
+  <!-- RIGHT SIDE (MOVE BANNER HERE) -->
   <div class="status" style="
     font-weight:600;
     background:#fff3cd;
@@ -213,17 +219,11 @@ thead th:nth-child(2) {
     max-width:420px;
   ">
     ⏰ Final day for adding planned courses is August 5<br>
-        Live sessions must be held the week of August 24
+    Live sessions must be held the week of August 24
   </div>
 
 </div>
 
-  <div class="row">
-    <div id="loginStatus" class="row">
-      <button class="btn btn-primary" onclick="login()">🔐 Login with Microsoft</button>
-    </div>
-    <div class="status" id="appStatus">Not signed in.</div>
-    </div>
   <div id="debugBox" class="mono"></div>
     </div>
 
